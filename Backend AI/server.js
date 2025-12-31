@@ -423,6 +423,17 @@ const groqClient = process.env.GROQ_API_KEY
     })
   : null;
 
+// Log which AI providers are available
+console.log("AI Providers Status:");
+console.log(
+  "  - Groq:",
+  groqClient ? "✓ Configured" : "✗ Not configured (missing GROQ_API_KEY)"
+);
+console.log(
+  "  - Gemini:",
+  genAI ? "✓ Configured" : "✗ Not configured (missing GEMINI_API_KEY)"
+);
+
 // Helper function to generate quiz with Groq
 async function generateQuizWithGroq(prompt) {
   if (!groqClient) {
