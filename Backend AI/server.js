@@ -16,7 +16,10 @@ dotenv.config();
 
 // Initialize database adapter (works with both PostgreSQL and SQLite)
 const dbAdapter = require("./database");
-const { dbType } = dbAdapter.initDatabase();
+dbAdapter.initDatabase();
+
+// Get dbType dynamically to ensure it's always current
+const getDbType = () => dbAdapter.dbType;
 
 // Create a wrapper pool object that works with both PostgreSQL and SQLite
 const pool = {
@@ -196,7 +199,7 @@ const optionalAuth = (req, res, next) => {
 // --- Database Initialization ---
 const initializeTables = async () => {
   // Skip PostgreSQL-specific initialization if using SQLite
-  if (dbType === "sqlite") {
+  if (getDbType() === "sqlite") {
     console.log(
       "Using SQLite - tables already initialized by database adapter"
     );
@@ -364,7 +367,7 @@ app.get("/health", async (req, res) => {
   try {
     // Use database-agnostic query
     const query =
-      dbType === "sqlite" ? "SELECT datetime('now') as now" : "SELECT NOW()";
+      getDbType() === "sqlite" ? "SELECT datetime('now') as now" : "SELECT NOW()";
 
     const dbCheck = await pool.query(query);
     res.status(200).json({
@@ -372,7 +375,7 @@ app.get("/health", async (req, res) => {
       timestamp: new Date().toISOString(),
       database: {
         status: "connected",
-        type: dbType,
+        type: getDbType(),
         timestamp: dbCheck.rows[0].now,
       },
     });
@@ -849,7 +852,7 @@ app.get("/api/statistics", simpleAuth, async (req, res, next) => {
   try {
     // SQLite-compatible queries
     const dateFormatFunc =
-      dbType === "sqlite"
+      getDbType() === "sqlite"
         ? "strftime('%Y-%m', completed_at)"
         : "TO_CHAR(completed_at, 'YYYY-MM')";
 
@@ -885,7 +888,7 @@ app.get("/api/statistics", simpleAuth, async (req, res, next) => {
 
       // Get monthly progress - SQLite compatible
       client.query(
-        dbType === "sqlite"
+        getDbType() === "sqlite"
           ? `
             SELECT 
               strftime('%Y-%m', completed_at) as month,
@@ -1166,7 +1169,7 @@ app.post("/api/gamification/award-xp", optionalAuth, async (req, res, next) => {
     if (existingUser.rows.length > 0) {
       // Update existing record - use database-specific date functions
       await client.query(
-        dbType === "sqlite"
+        getDbType() === "sqlite"
           ? `UPDATE user_gamification 
              SET total_xp = total_xp + $1,
                  total_quizzes_completed = total_quizzes_completed + 1,
@@ -1195,7 +1198,7 @@ app.post("/api/gamification/award-xp", optionalAuth, async (req, res, next) => {
     } else {
       // Create new record - use database-specific date functions
       await client.query(
-        dbType === "sqlite"
+        getDbType() === "sqlite"
           ? `INSERT INTO user_gamification 
              (user_id, total_xp, total_quizzes_completed, total_perfect_scores, current_level, last_activity_date) 
              VALUES ($1, $2, 1, $3, CAST($2 / 1000 AS INTEGER) + 1, date('now'))`
@@ -1360,7 +1363,7 @@ app.post(
 
       // SQLite compatible UPSERT
       await client.query(
-        dbType === "sqlite"
+        getDbType() === "sqlite"
           ? `INSERT INTO user_learning_analytics 
              (user_id, topic, difficulty, total_attempts, average_score, mastery_level, last_attempt_date)
              VALUES ($1, $2, $3, 1, $4, $4, datetime('now'))
@@ -1419,7 +1422,7 @@ app.get("/api/analytics/comprehensive", simpleAuth, async (req, res, next) => {
 
     // Get performance trends (last 30 days) - SQLite compatible
     const performanceTrends = await client.query(
-      dbType === "sqlite"
+      getDbType() === "sqlite"
         ? `SELECT DATE(completed_at) as date, 
                 AVG(CAST(score AS FLOAT) / total_questions * 100) as average_score,
                 COUNT(*) as quiz_count
