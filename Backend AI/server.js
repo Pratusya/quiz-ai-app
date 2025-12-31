@@ -1381,7 +1381,7 @@ app.post(
              DO UPDATE SET
                total_attempts = user_learning_analytics.total_attempts + 1,
                average_score = ((user_learning_analytics.average_score * user_learning_analytics.total_attempts) + $4) / (user_learning_analytics.total_attempts + 1),
-               mastery_level = MIN(((user_learning_analytics.average_score * user_learning_analytics.total_attempts + $4) / (user_learning_analytics.total_attempts + 1)), 100),
+               mastery_level = LEAST(((user_learning_analytics.average_score * user_learning_analytics.total_attempts + $4) / (user_learning_analytics.total_attempts + 1)), 100.0),
                last_attempt_date = CURRENT_TIMESTAMP,
                updated_at = CURRENT_TIMESTAMP`,
         [req.user.userId, topic, difficulty, accuracy]

@@ -174,6 +174,10 @@ async function createPostgresTables() {
         ended_at TIMESTAMP WITH TIME ZONE
       );
 
+      -- Add missing columns to existing tables (safe to run multiple times)
+      ALTER TABLE user_gamification ADD COLUMN IF NOT EXISTS last_activity_date DATE;
+      ALTER TABLE user_gamification ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+
       -- Multiplayer participants table
       CREATE TABLE IF NOT EXISTS multiplayer_participants (
         id SERIAL PRIMARY KEY,
