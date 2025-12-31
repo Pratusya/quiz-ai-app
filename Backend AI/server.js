@@ -1164,16 +1164,25 @@ app.post("/api/gamification/award-xp", optionalAuth, async (req, res, next) => {
     let userData;
 
     if (existingUser.rows.length > 0) {
-      // Update existing record
+      // Update existing record - use database-specific date functions
       await client.query(
-        `UPDATE user_gamification 
-         SET total_xp = total_xp + $1,
-             total_quizzes_completed = total_quizzes_completed + 1,
-             total_perfect_scores = total_perfect_scores + $2,
-             current_level = CAST((total_xp + $1) / 1000 AS INTEGER) + 1,
-             last_activity_date = date('now'),
-             updated_at = datetime('now')
-         WHERE user_id = $3`,
+        dbType === "sqlite"
+          ? `UPDATE user_gamification 
+             SET total_xp = total_xp + $1,
+                 total_quizzes_completed = total_quizzes_completed + 1,
+                 total_perfect_scores = total_perfect_scores + $2,
+                 current_level = CAST((total_xp + $1) / 1000 AS INTEGER) + 1,
+                 last_activity_date = date('now'),
+                 updated_at = datetime('now')
+             WHERE user_id = $3`
+          : `UPDATE user_gamification 
+             SET total_xp = total_xp + $1,
+                 total_quizzes_completed = total_quizzes_completed + 1,
+                 total_perfect_scores = total_perfect_scores + $2,
+                 current_level = CAST((total_xp + $1) / 1000 AS INTEGER) + 1,
+                 last_activity_date = CURRENT_DATE,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE user_id = $3`,
         [xp_earned, perfect_score ? 1 : 0, req.user.userId]
       );
 
@@ -1184,11 +1193,15 @@ app.post("/api/gamification/award-xp", optionalAuth, async (req, res, next) => {
       );
       userData = updatedResult.rows[0];
     } else {
-      // Create new record
+      // Create new record - use database-specific date functions
       await client.query(
-        `INSERT INTO user_gamification 
-         (user_id, total_xp, total_quizzes_completed, total_perfect_scores, current_level, last_activity_date) 
-         VALUES ($1, $2, 1, $3, CAST($2 / 1000 AS INTEGER) + 1, date('now'))`,
+        dbType === "sqlite"
+          ? `INSERT INTO user_gamification 
+             (user_id, total_xp, total_quizzes_completed, total_perfect_scores, current_level, last_activity_date) 
+             VALUES ($1, $2, 1, $3, CAST($2 / 1000 AS INTEGER) + 1, date('now'))`
+          : `INSERT INTO user_gamification 
+             (user_id, total_xp, total_quizzes_completed, total_perfect_scores, current_level, last_activity_date) 
+             VALUES ($1, $2, 1, $3, CAST($2 / 1000 AS INTEGER) + 1, CURRENT_DATE)`,
         [req.user.userId, xp_earned, perfect_score ? 1 : 0]
       );
 
