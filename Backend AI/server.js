@@ -367,7 +367,9 @@ app.get("/health", async (req, res) => {
   try {
     // Use database-agnostic query
     const query =
-      getDbType() === "sqlite" ? "SELECT datetime('now') as now" : "SELECT NOW()";
+      getDbType() === "sqlite"
+        ? "SELECT datetime('now') as now"
+        : "SELECT NOW()";
 
     const dbCheck = await pool.query(query);
     res.status(200).json({
