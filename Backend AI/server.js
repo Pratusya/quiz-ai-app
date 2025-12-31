@@ -5,6 +5,7 @@ const dotenv = require("dotenv");
 const Joi = require("joi");
 const bcrypt = require("bcrypt");
 const http = require("http");
+const rateLimit = require("express-rate-limit");
 const { upload, processMultiModalContent } = require("./multiModalProcessor");
 const {
   initializeMultiplayer,
@@ -165,6 +166,20 @@ const corsOptions = {
 // Apply CORS before other middleware
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Rate limiting for AI endpoints (10 requests per minute per user)
+const aiRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 requests per minute
+  message: {
+    status: "error",
+    message:
+      "Too many requests. Please wait a minute before generating more quizzes.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.headers["user-id"] || req.ip,
+});
 
 // --- Auth Middleware ---
 const simpleAuth = (req, res, next) => {
@@ -396,20 +411,24 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Generate Quiz using Gemini AI
-app.post("/api/generate-quiz", optionalAuth, async (req, res, next) => {
-  try {
-    const { topic, difficulty, numQuestions, questionType, language } =
-      req.body;
+app.post(
+  "/api/generate-quiz",
+  aiRateLimiter,
+  optionalAuth,
+  async (req, res, next) => {
+    try {
+      const { topic, difficulty, numQuestions, questionType, language } =
+        req.body;
 
-    if (!topic || !difficulty || !numQuestions) {
-      return res.status(400).json({
-        status: "error",
-        message: "Topic, difficulty, and number of questions are required",
-      });
-    }
+      if (!topic || !difficulty || !numQuestions) {
+        return res.status(400).json({
+          status: "error",
+          message: "Topic, difficulty, and number of questions are required",
+        });
+      }
 
-    // Construct prompt for Gemini
-    const prompt = `Generate a ${difficulty} difficulty quiz about "${topic}" with ${numQuestions} questions.
+      // Construct prompt for Gemini
+      const prompt = `Generate a ${difficulty} difficulty quiz about "${topic}" with ${numQuestions} questions.
 
 Question Type: ${questionType || "MCQ"}
 Language: ${language || "English"}
@@ -433,79 +452,80 @@ JSON Format:
 
 Generate EXACTLY ${numQuestions} questions. Return ONLY the JSON, no additional text.`;
 
-    console.log("Generating quiz with Gemini AI for topic:", topic);
+      console.log("Generating quiz with Gemini AI for topic:", topic);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let responseText = response.text().trim();
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      let responseText = response.text().trim();
 
-    // Clean the response - remove markdown code blocks if present
-    responseText = responseText
-      .replace(/```json\n?/g, "")
-      .replace(/```\n?/g, "")
-      .trim();
+      // Clean the response - remove markdown code blocks if present
+      responseText = responseText
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
 
-    // Parse the JSON response
-    const quizData = JSON.parse(responseText);
+      // Parse the JSON response
+      const quizData = JSON.parse(responseText);
 
-    if (!quizData.questions || !Array.isArray(quizData.questions)) {
-      throw new Error("Invalid quiz data format");
-    }
+      if (!quizData.questions || !Array.isArray(quizData.questions)) {
+        throw new Error("Invalid quiz data format");
+      }
 
-    console.log(
-      `Successfully generated ${quizData.questions.length} questions`
-    );
+      console.log(
+        `Successfully generated ${quizData.questions.length} questions`
+      );
 
-    res.json({
-      status: "success",
-      quiz: quizData,
-      metadata: {
-        topic,
-        difficulty,
-        numQuestions: quizData.questions.length,
-        questionType: questionType || "MCQ",
-        language: language || "English",
-      },
-    });
-  } catch (error) {
-    console.error("Quiz generation error:", error);
+      res.json({
+        status: "success",
+        quiz: quizData,
+        metadata: {
+          topic,
+          difficulty,
+          numQuestions: quizData.questions.length,
+          questionType: questionType || "MCQ",
+          language: language || "English",
+        },
+      });
+    } catch (error) {
+      console.error("Quiz generation error:", error);
 
-    // Handle Gemini API-specific errors with user-friendly messages
-    if (
-      error.status === 429 ||
-      error.message?.includes("quota") ||
-      error.message?.includes("RESOURCE_EXHAUSTED")
-    ) {
-      return res.status(503).json({
+      // Handle Gemini API-specific errors with user-friendly messages
+      if (
+        error.status === 429 ||
+        error.message?.includes("quota") ||
+        error.message?.includes("RESOURCE_EXHAUSTED")
+      ) {
+        return res.status(503).json({
+          status: "error",
+          message:
+            "AI service is temporarily unavailable. The API quota has been exceeded. Please try again later or contact the administrator.",
+          errorType: "quota_exceeded",
+          technicalDetails: "Gemini API quota exceeded",
+        });
+      }
+
+      if (
+        error.status === 401 ||
+        error.message?.includes("API_KEY_INVALID") ||
+        error.message?.includes("authentication")
+      ) {
+        return res.status(503).json({
+          status: "error",
+          message:
+            "AI service authentication failed. Please check your API key configuration.",
+          errorType: "auth_failed",
+        });
+      }
+
+      res.status(500).json({
         status: "error",
-        message:
-          "AI service is temporarily unavailable. The API quota has been exceeded. Please try again later or contact the administrator.",
-        errorType: "quota_exceeded",
-        technicalDetails: "Gemini API quota exceeded",
+        message: error.message || "Failed to generate quiz",
+        errorType: "generation_failed",
       });
     }
-
-    if (
-      error.status === 401 ||
-      error.message?.includes("API_KEY_INVALID") ||
-      error.message?.includes("authentication")
-    ) {
-      return res.status(503).json({
-        status: "error",
-        message:
-          "AI service authentication failed. Please check your API key configuration.",
-        errorType: "auth_failed",
-      });
-    }
-
-    res.status(500).json({
-      status: "error",
-      message: error.message || "Failed to generate quiz",
-      errorType: "generation_failed",
-    });
   }
-});
+);
 
 // Create Quiz
 app.post("/api/quizzes", simpleAuth, async (req, res, next) => {
