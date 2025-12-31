@@ -26,11 +26,11 @@ START.bat
 
 ## Application URLs
 
-| Service      | URL                          | Description     |
-| ------------ | ---------------------------- | --------------- |
-| Frontend     | http://localhost:5173        | Main Quiz App   |
-| Backend API  | http://localhost:5000        | REST API Server |
-| Health Check | http://localhost:5000/health | Server Status   |
+| Service      | URL                                   | Description     |
+| ------------ | ------------------------------------- | --------------- |
+| Frontend     | http://ai-quizlab.netlify.app/        | Main Quiz App   |
+| Backend API  | https://quiz-ai-app-pqyh.onrender.com | REST API Server |
+| Health Check | http://localhost:5000/health          | Server Status   |
 
 ## Features Working
 
