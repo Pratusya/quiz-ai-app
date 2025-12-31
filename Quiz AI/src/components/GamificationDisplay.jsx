@@ -36,18 +36,16 @@ const GamificationDisplay = ({ compact = false }) => {
       return;
     }
 
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
     try {
-      const response = await axios.get(
-        "http://localhost:5000/api/gamification",
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "user-id": userId,
-            username: userId,
-          },
-          timeout: 5000, // 5 second timeout
-        }
-      );
+      const response = await axios.get(`${API_URL}/api/gamification`, {
+        headers: {
+          "Content-Type": "application/json",
+          "user-id": userId,
+          username: userId,
+        },
+        timeout: 5000, // 5 second timeout
+      });
 
       if (response.data.status === "success") {
         setGamificationData(response.data.data);

@@ -27,6 +27,8 @@ const AITutor = ({ question, userAnswer, correctAnswer, topic, isCorrect }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -36,23 +38,20 @@ const AITutor = ({ question, userAnswer, correctAnswer, topic, isCorrect }) => {
     setIsOpen(true);
 
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/ai-tutor/explain",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "user-id": localStorage.getItem("userId") || "guest",
-            username: localStorage.getItem("username") || "Guest",
-          },
-          body: JSON.stringify({
-            question,
-            userAnswer,
-            correctAnswer,
-            topic,
-          }),
-        }
-      );
+      const response = await fetch(`${API_URL}/api/ai-tutor/explain`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "user-id": localStorage.getItem("userId") || "guest",
+          username: localStorage.getItem("username") || "Guest",
+        },
+        body: JSON.stringify({
+          question,
+          userAnswer,
+          correctAnswer,
+          topic,
+        }),
+      });
 
       if (!response.ok) {
         throw new Error("Failed to get explanation");
@@ -84,7 +83,7 @@ const AITutor = ({ question, userAnswer, correctAnswer, topic, isCorrect }) => {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/ai-tutor/chat", {
+      const response = await fetch(`${API_URL}/api/ai-tutor/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

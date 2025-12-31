@@ -4,6 +4,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-hot-toast";
 import axios from "axios";
 import { Loader2, Share2, Download, Redo } from "lucide-react";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -316,7 +319,7 @@ function QuizGenerator() {
 
     try {
       const response = await axios.get(
-        `http://localhost:5000/api/adaptive-learning/recommendation`,
+        `${API_URL}/api/adaptive-learning/recommendation`,
         {
           params: { topic },
           headers: {
@@ -563,7 +566,7 @@ function QuizGenerator() {
       console.log("Quiz payload:", JSON.stringify(requestPayload, null, 2)); // For debugging
 
       const response = await axios.post(
-        "http://localhost:5000/api/quizzes",
+        `${API_URL}/api/quizzes`,
         requestPayload,
         {
           headers: {
@@ -611,7 +614,7 @@ function QuizGenerator() {
 
       // Call backend API to generate quiz using OpenAI
       const response = await axios.post(
-        "http://localhost:5000/api/generate-quiz",
+        `${API_URL}/api/generate-quiz`,
         {
           topic: topic,
           difficulty: difficulty,
@@ -810,7 +813,7 @@ function QuizGenerator() {
 
       // Submit quiz results
       const response = await axios.post(
-        "http://localhost:5000/api/quiz-results",
+        `${API_URL}/api/quiz-results`,
         {
           quizId: quizData.quizId,
           score: quizData.score,
@@ -835,7 +838,7 @@ function QuizGenerator() {
         // Award XP and check for badges
         try {
           const xpResponse = await axios.post(
-            "http://localhost:5000/api/gamification/award-xp",
+            `${API_URL}/api/gamification/award-xp`,
             {
               xp_earned: xpEarned,
               quiz_score: rawScore,
@@ -877,7 +880,7 @@ function QuizGenerator() {
         // Update learning analytics
         try {
           await axios.post(
-            "http://localhost:5000/api/adaptive-learning/update",
+            `${API_URL}/api/adaptive-learning/update`,
             {
               topic: topic,
               difficulty: difficulty,
@@ -949,7 +952,7 @@ function QuizGenerator() {
       });
 
       const response = await axios.post(
-        "http://localhost:5000/api/quiz-history",
+        `${API_URL}/api/quiz-history`,
         {
           quizId: parseInt(quizId),
           promptUsed: promptUsed || "Default prompt",
