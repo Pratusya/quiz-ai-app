@@ -1228,9 +1228,18 @@ app.post("/api/gamification/award-xp", optionalAuth, async (req, res, next) => {
       },
     });
   } catch (error) {
-    await client.query("ROLLBACK");
-    console.error("Award XP error:", error);
-    next(error);
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error("Rollback error:", rollbackErr);
+    }
+    console.error("Award XP error:", error.message);
+    console.error("Error stack:", error.stack);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to award XP",
+      details: error.message,
+    });
   } finally {
     client.release();
   }
@@ -1380,8 +1389,13 @@ app.post(
         message: "Learning analytics updated",
       });
     } catch (error) {
-      console.error("Update learning analytics error:", error);
-      next(error);
+      console.error("Update learning analytics error:", error.message);
+      console.error("Error stack:", error.stack);
+      res.status(500).json({
+        status: "error",
+        message: "Failed to update learning analytics",
+        details: error.message,
+      });
     } finally {
       client.release();
     }

@@ -9,6 +9,7 @@ const path = require("path");
 
 let db;
 let dbType;
+let tablesReady = false;
 
 // Initialize database connection
 function initDatabase() {
@@ -26,8 +27,15 @@ function initDatabase() {
         : false,
     });
 
-    // Create PostgreSQL tables
-    createPostgresTables();
+    // Create PostgreSQL tables (async, will complete in background)
+    createPostgresTables()
+      .then(() => {
+        tablesReady = true;
+        console.log("✅ PostgreSQL ready");
+      })
+      .catch((err) => {
+        console.error("❌ PostgreSQL setup error:", err);
+      });
   } else {
     console.log("📊 Using SQLite database...");
     dbType = "sqlite";
@@ -38,6 +46,7 @@ function initDatabase() {
 
     // Create tables for SQLite
     createSQLiteTables();
+    tablesReady = true;
   }
 
   return { db, dbType };
@@ -644,13 +653,17 @@ async function query(text, params = []) {
 // Get a client (for transaction support)
 async function getClient() {
   if (dbType === "postgres") {
-    return await db.connect();
+    const pgClient = await db.connect();
+    // Wrap the PostgreSQL client to add dbType info
+    pgClient.dbType = "postgres";
+    return pgClient;
   } else {
     // For SQLite, return a mock client with transaction support
     return {
       query: query,
       release: () => {},
       end: () => {},
+      dbType: "sqlite",
     };
   }
 }
