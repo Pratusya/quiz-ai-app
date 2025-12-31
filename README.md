@@ -71,13 +71,13 @@ This project includes custom scripts for a one-click startup experience.
    ```bash
    git clone [https://github.com/Pratusya/quiz-ai-app.git](https://github.com/Pratusya/quiz-ai-app.git)
 
-```
-
 2. **Configure Environment**
 Create a `.env` file in the `Backend AI` folder and add your keys (Gemini API, Clerk, Database URL).
+
 3. **Run the App**
 * **Windows:** Double-click `START.bat` or run `.\START.ps1` in PowerShell.
 
+```
 
 *This script automatically checks Node.js versions, installs dependencies if missing, and launches both frontend and backend servers.*
 
@@ -107,7 +107,17 @@ npm run dev
 
 ## 📸 Screenshots
 
-*(Add a few screenshots of your app here - Dashboard, Quiz Screen, Leaderboard)*
+<img width="1919" height="911" alt="image" src="https://github.com/user-attachments/assets/a1b53a00-0368-47b4-8b0f-2791c4e1d6ba" />
+
+
+<img width="1919" height="907" alt="image" src="https://github.com/user-attachments/assets/2ef4bb53-ac7a-429f-8eaa-b48451496cb1" />
+
+
+<img width="1919" height="910" alt="image" src="https://github.com/user-attachments/assets/82b7e453-790e-44a1-af34-c142b7f277cf" />
+
+
+<img width="1919" height="905" alt="image" src="https://github.com/user-attachments/assets/cbe5752f-0b52-43b2-8068-9ad453572caa" />
+
 
 ## 🤝 Contributing
 
