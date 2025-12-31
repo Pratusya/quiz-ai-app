@@ -443,7 +443,7 @@ async function generateQuizWithGroq(prompt) {
   console.log("Generating quiz with Groq...");
 
   const completion = await groqClient.chat.completions.create({
-    model: "llama-3.1-70b-versatile",
+    model: "llama-3.3-70b-versatile",
     messages: [
       {
         role: "system",
