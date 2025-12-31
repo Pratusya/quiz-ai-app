@@ -410,9 +410,12 @@ app.get("/health", async (req, res) => {
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const OpenAI = require("openai");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize AI clients
+const genAI = process.env.GEMINI_API_KEY
+  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  : null;
 
-// Groq client (OpenAI-compatible) as backup
+// Groq client (OpenAI-compatible) - PRIMARY provider
 const groqClient = process.env.GROQ_API_KEY
   ? new OpenAI({
       apiKey: process.env.GROQ_API_KEY,
@@ -420,13 +423,13 @@ const groqClient = process.env.GROQ_API_KEY
     })
   : null;
 
-// Helper function to generate quiz with Groq (backup)
+// Helper function to generate quiz with Groq
 async function generateQuizWithGroq(prompt) {
   if (!groqClient) {
     throw new Error("Groq API key not configured");
   }
 
-  console.log("Attempting quiz generation with Groq (backup)...");
+  console.log("Generating quiz with Groq...");
 
   const completion = await groqClient.chat.completions.create({
     model: "llama-3.1-70b-versatile",
@@ -448,7 +451,20 @@ async function generateQuizWithGroq(prompt) {
   return completion.choices[0].message.content.trim();
 }
 
-// Generate Quiz using Gemini AI
+// Helper function to generate quiz with Gemini
+async function generateQuizWithGemini(prompt) {
+  if (!genAI) {
+    throw new Error("Gemini API key not configured");
+  }
+
+  console.log("Generating quiz with Gemini...");
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  return response.text().trim();
+}
+
+// Generate Quiz - tries Groq first, then Gemini as backup
 app.post(
   "/api/generate-quiz",
   aiRateLimiter,
@@ -491,31 +507,40 @@ JSON Format:
 Generate EXACTLY ${numQuestions} questions. Return ONLY the JSON, no additional text.`;
 
       let responseText;
-      let usedProvider = "gemini";
+      let usedProvider = "none";
 
-      // Try Gemini first, fall back to Groq if quota exceeded
-      try {
-        console.log("Generating quiz with Gemini AI for topic:", topic);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        responseText = response.text().trim();
-      } catch (geminiError) {
-        console.error("Gemini error:", geminiError.message);
-
-        // Check if it's a quota/rate limit error and Groq is available
-        const isQuotaError =
-          geminiError.status === 429 ||
-          geminiError.message?.includes("quota") ||
-          geminiError.message?.includes("RESOURCE_EXHAUSTED");
-
-        if (isQuotaError && groqClient) {
-          console.log("Gemini quota exceeded, falling back to Groq...");
+      // Try Groq first (primary), then Gemini as backup
+      if (groqClient) {
+        try {
           responseText = await generateQuizWithGroq(prompt);
           usedProvider = "groq";
-        } else {
-          throw geminiError; // Re-throw if not quota error or no Groq backup
+        } catch (groqError) {
+          console.error("Groq error:", groqError.message);
+          // Try Gemini as backup
+          if (genAI) {
+            console.log("Groq failed, trying Gemini...");
+            responseText = await generateQuizWithGemini(prompt);
+            usedProvider = "gemini";
+          } else {
+            throw groqError;
+          }
         }
+      } else if (genAI) {
+        // No Groq, try Gemini
+        try {
+          responseText = await generateQuizWithGemini(prompt);
+          usedProvider = "gemini";
+        } catch (geminiError) {
+          throw geminiError;
+        }
+      } else {
+        // No AI provider configured
+        return res.status(503).json({
+          status: "error",
+          message:
+            "No AI service configured. Please add GROQ_API_KEY or GEMINI_API_KEY.",
+          errorType: "no_ai_configured",
+        });
       }
 
       // Clean the response - remove markdown code blocks if present
