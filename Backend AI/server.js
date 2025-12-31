@@ -408,7 +408,45 @@ app.get("/health", async (req, res) => {
 
 // === QUIZ GENERATION ENDPOINT ===
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const OpenAI = require("openai");
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// Groq client (OpenAI-compatible) as backup
+const groqClient = process.env.GROQ_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: "https://api.groq.com/openai/v1",
+    })
+  : null;
+
+// Helper function to generate quiz with Groq (backup)
+async function generateQuizWithGroq(prompt) {
+  if (!groqClient) {
+    throw new Error("Groq API key not configured");
+  }
+
+  console.log("Attempting quiz generation with Groq (backup)...");
+
+  const completion = await groqClient.chat.completions.create({
+    model: "llama-3.1-70b-versatile",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a quiz generator. Return only valid JSON with no additional text or markdown formatting.",
+      },
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+    temperature: 0.7,
+    max_tokens: 4096,
+  });
+
+  return completion.choices[0].message.content.trim();
+}
 
 // Generate Quiz using Gemini AI
 app.post(
@@ -427,7 +465,7 @@ app.post(
         });
       }
 
-      // Construct prompt for Gemini
+      // Construct prompt
       const prompt = `Generate a ${difficulty} difficulty quiz about "${topic}" with ${numQuestions} questions.
 
 Question Type: ${questionType || "MCQ"}
@@ -452,12 +490,33 @@ JSON Format:
 
 Generate EXACTLY ${numQuestions} questions. Return ONLY the JSON, no additional text.`;
 
-      console.log("Generating quiz with Gemini AI for topic:", topic);
+      let responseText;
+      let usedProvider = "gemini";
 
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      let responseText = response.text().trim();
+      // Try Gemini first, fall back to Groq if quota exceeded
+      try {
+        console.log("Generating quiz with Gemini AI for topic:", topic);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        responseText = response.text().trim();
+      } catch (geminiError) {
+        console.error("Gemini error:", geminiError.message);
+
+        // Check if it's a quota/rate limit error and Groq is available
+        const isQuotaError =
+          geminiError.status === 429 ||
+          geminiError.message?.includes("quota") ||
+          geminiError.message?.includes("RESOURCE_EXHAUSTED");
+
+        if (isQuotaError && groqClient) {
+          console.log("Gemini quota exceeded, falling back to Groq...");
+          responseText = await generateQuizWithGroq(prompt);
+          usedProvider = "groq";
+        } else {
+          throw geminiError; // Re-throw if not quota error or no Groq backup
+        }
+      }
 
       // Clean the response - remove markdown code blocks if present
       responseText = responseText
@@ -473,7 +532,7 @@ Generate EXACTLY ${numQuestions} questions. Return ONLY the JSON, no additional 
       }
 
       console.log(
-        `Successfully generated ${quizData.questions.length} questions`
+        `Successfully generated ${quizData.questions.length} questions using ${usedProvider}`
       );
 
       res.json({
@@ -485,6 +544,7 @@ Generate EXACTLY ${numQuestions} questions. Return ONLY the JSON, no additional 
           numQuestions: quizData.questions.length,
           questionType: questionType || "MCQ",
           language: language || "English",
+          provider: usedProvider,
         },
       });
     } catch (error) {
