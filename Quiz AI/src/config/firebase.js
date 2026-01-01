@@ -18,23 +18,14 @@ import {
 } from "firebase/auth";
 
 // Firebase configuration
-// Using your Firebase project config
+// Set these in your .env file (VITE_FIREBASE_*) or in Netlify environment variables
 const firebaseConfig = {
-  apiKey:
-    import.meta.env.VITE_FIREBASE_API_KEY ||
-    "AIzaSyD_1LUDeahAbbE1gSv58cp6jRzcrZZwBMI",
-  authDomain:
-    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
-    "quiz-ai-app-789e5.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "quiz-ai-app-789e5",
-  storageBucket:
-    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
-    "quiz-ai-app-789e5.firebasestorage.app",
-  messagingSenderId:
-    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "449299083402",
-  appId:
-    import.meta.env.VITE_FIREBASE_APP_ID ||
-    "1:449299083402:web:1cc8c486042d37e593bd73",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
 };
 
 // Initialize Firebase
