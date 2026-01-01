@@ -3,7 +3,7 @@
  * Modern, secure login page with social login and phone OTP options
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -28,11 +28,18 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import authApi from "../utils/authApi";
+import {
+  setupRecaptcha,
+  sendFirebaseOTP,
+  verifyFirebaseOTP,
+  isFirebaseConfigured,
+} from "../config/firebase";
 
 function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login, loginWithOAuth, isLoading } = useAuth();
+  const sendOtpButtonRef = useRef(null);
 
   // Form states
   const [loginMethod, setLoginMethod] = useState("email"); // email, phone
@@ -45,8 +52,28 @@ function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
   const redirectTo = searchParams.get("redirect") || "/";
+
+  // Countdown timer for resend OTP
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  // Setup reCAPTCHA when phone login method is selected
+  useEffect(() => {
+    if (loginMethod === "phone" && isFirebaseConfigured() && !otpSent) {
+      setTimeout(() => {
+        if (sendOtpButtonRef.current) {
+          setupRecaptcha("send-otp-btn");
+        }
+      }, 500);
+    }
+  }, [loginMethod, otpSent]);
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
@@ -83,23 +110,36 @@ function Login() {
       return;
     }
 
+    // Check if Firebase is configured
+    if (!isFirebaseConfigured()) {
+      setError(
+        "Phone authentication is not configured. Please use email login."
+      );
+      return;
+    }
+
     setError("");
     setOtpLoading(true);
 
     try {
-      const result = await authApi.sendPhoneOTP(phone);
-
-      if (result.success) {
-        setOtpSent(true);
-        toast.success("OTP sent to your phone!");
-        if (result.devMode && result.otp) {
-          toast(`Dev Mode - OTP: ${result.otp}`, { duration: 10000 });
-        }
-      } else {
-        setError(result.error || "Failed to send OTP");
+      // Format phone number
+      let formattedPhone = phone.trim();
+      if (!formattedPhone.startsWith("+")) {
+        formattedPhone = "+91" + formattedPhone.replace(/^0/, "");
       }
+
+      await sendFirebaseOTP(formattedPhone);
+      setOtpSent(true);
+      setCountdown(60);
+      toast.success("OTP sent to " + formattedPhone);
     } catch (err) {
-      setError("Failed to send OTP");
+      setError(err.message || "Failed to send OTP");
+      // Re-setup reCAPTCHA on error
+      setTimeout(() => {
+        if (sendOtpButtonRef.current) {
+          setupRecaptcha("send-otp-btn");
+        }
+      }, 500);
     } finally {
       setOtpLoading(false);
     }
@@ -111,21 +151,39 @@ function Login() {
     setIsSubmitting(true);
 
     try {
-      const result = await authApi.verifyPhoneOTP(phone, otp);
+      // Verify OTP with Firebase
+      const firebaseResult = await verifyFirebaseOTP(otp);
 
-      if (result.success) {
-        // Store tokens
-        authApi.storeTokens(result.accessToken, result.refreshToken);
-        authApi.storeUser(result.user);
+      if (firebaseResult.user) {
+        // Get Firebase ID token and send to backend
+        const idToken = await firebaseResult.user.getIdToken();
 
-        toast.success(result.isNewUser ? "Account created!" : "Welcome back!");
-        navigate(redirectTo);
-        window.location.reload(); // Refresh to update auth state
-      } else {
-        setError(result.error || "Invalid OTP");
+        // Format phone number
+        let formattedPhone = phone.trim();
+        if (!formattedPhone.startsWith("+")) {
+          formattedPhone = "+91" + formattedPhone.replace(/^0/, "");
+        }
+
+        // Call backend to create/login user with phone
+        const result = await authApi.loginWithFirebasePhone(
+          formattedPhone,
+          idToken
+        );
+
+        if (result.success) {
+          authApi.storeTokens(result.accessToken, result.refreshToken);
+          authApi.storeUser(result.user);
+          toast.success(
+            result.isNewUser ? "Account created!" : "Welcome back!"
+          );
+          navigate(redirectTo);
+          window.location.reload();
+        } else {
+          setError(result.error || "Login failed");
+        }
       }
     } catch (err) {
-      setError("Verification failed");
+      setError(err.message || "Verification failed");
     } finally {
       setIsSubmitting(false);
     }
@@ -316,6 +374,8 @@ function Login() {
                   </div>
 
                   <Button
+                    id="send-otp-btn"
+                    ref={sendOtpButtonRef}
                     type="button"
                     variant="gradient"
                     className="w-full"
@@ -335,6 +395,12 @@ function Login() {
                       </>
                     )}
                   </Button>
+
+                  {!isFirebaseConfigured() && (
+                    <p className="text-xs text-amber-500 text-center">
+                      ⚠️ Phone auth not configured. Please use email login.
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
@@ -386,14 +452,30 @@ function Login() {
                     )}
                   </Button>
 
-                  <button
-                    type="button"
-                    onClick={handleSendOTP}
-                    disabled={otpLoading}
-                    className="w-full text-sm text-primary hover:underline"
-                  >
-                    Resend OTP
-                  </button>
+                  <div className="text-center">
+                    {countdown > 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Resend OTP in {countdown}s
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOtpSent(false);
+                          setOtp("");
+                          // Re-setup reCAPTCHA
+                          setTimeout(() => {
+                            if (sendOtpButtonRef.current) {
+                              setupRecaptcha("send-otp-btn");
+                            }
+                          }, 500);
+                        }}
+                        className="text-sm text-primary hover:underline"
+                      >
+                        Change number or resend
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </form>

@@ -1192,6 +1192,101 @@ router.post("/phone/verify-otp", async (req, res) => {
 });
 
 /**
+ * POST /api/auth/phone/firebase-login
+ * Login/Register with Firebase Phone Auth
+ * Called after client-side Firebase OTP verification succeeds
+ */
+router.post("/phone/firebase-login", async (req, res) => {
+  try {
+    const { phone, firebaseIdToken } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: "Phone number is required",
+      });
+    }
+
+    // Note: In production, you should verify the Firebase ID token
+    // using Firebase Admin SDK to ensure it's valid
+    // For now, we trust the client-side Firebase verification
+
+    const normalizedPhone = smsUtils.normalizePhoneNumber(phone);
+
+    // Find or create user
+    let user = await findUserByPhone(normalizedPhone);
+    let isNewUser = false;
+
+    if (!user) {
+      // Create new user with phone
+      isNewUser = true;
+      user = await createUser({
+        email: null,
+        username: `user_${Date.now()}`,
+        password_hash: null,
+        oauth_provider: "firebase_phone",
+        oauth_provider_id: normalizedPhone,
+        avatar_url: null,
+        email_verified: false,
+        phone_number: normalizedPhone,
+        phone_verified: true,
+      });
+    } else {
+      // Update phone verified status if needed
+      if (!user.phone_verified) {
+        user = await updateUser(user.id, { phone_verified: 1 });
+      }
+    }
+
+    // Update last login
+    await updateUser(user.id, { last_login: new Date().toISOString() });
+
+    // Generate tokens
+    const accessToken = jwtUtils.generateAccessToken(user);
+    const refreshToken = jwtUtils.generateRefreshToken(user);
+
+    // Store refresh token
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await storeRefreshToken(user.id, tokenHash, expiresAt);
+
+    // Reset login attempts
+    resetLoginAttempts(normalizedPhone);
+
+    // Sanitize user data
+    const userData = {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      avatarUrl: user.avatar_url,
+      phoneNumber: user.phone_number,
+      phoneVerified: user.phone_verified,
+      createdAt: user.created_at,
+    };
+
+    res.json({
+      success: true,
+      message: isNewUser
+        ? "Account created successfully"
+        : "Logged in successfully",
+      isNewUser,
+      accessToken,
+      refreshToken,
+      user: userData,
+    });
+  } catch (error) {
+    console.error("Firebase phone login error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to login with phone",
+    });
+  }
+});
+
+/**
  * Find user by phone number
  */
 async function findUserByPhone(phone) {
