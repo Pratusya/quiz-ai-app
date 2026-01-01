@@ -46,28 +46,9 @@ module.exports = {
   },
 
   // SMS/Phone Authentication Configuration
-  // FREE OPTIONS: textbelt, fast2sms | PAID: twilio
+  // Phone OTP is handled by Firebase (client-side) - 10K free/month
   sms: {
-    provider: process.env.SMS_PROVIDER || "textbelt", // textbelt (free), fast2sms (free India), twilio (paid)
-
-    // TextBelt Configuration (FREE - 1 SMS/day, International)
-    textbelt: {
-      apiKey: process.env.TEXTBELT_API_KEY || "textbelt", // "textbelt" = free tier
-    },
-
-    // Fast2SMS Configuration (FREE tier for India +91)
-    fast2sms: {
-      apiKey: process.env.FAST2SMS_API_KEY,
-    },
-
-    // Twilio Configuration (PAID)
-    twilio: {
-      accountSid: process.env.TWILIO_ACCOUNT_SID,
-      authToken: process.env.TWILIO_AUTH_TOKEN,
-      phoneNumber: process.env.TWILIO_PHONE_NUMBER,
-      verifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID,
-    },
-
+    provider: process.env.SMS_PROVIDER || "dev", // dev mode (Firebase handles OTP)
     otpExpiry: 5 * 60 * 1000, // 5 minutes
     otpLength: 6,
     maxAttempts: 3,
