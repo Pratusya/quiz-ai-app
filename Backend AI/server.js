@@ -13,6 +13,10 @@ const {
   getRoomInfo,
 } = require("./multiplayer");
 
+// --- Authentication Module ---
+const { initAuthRoutes } = require("./auth/routes");
+const authMiddleware = require("./auth/middleware");
+
 dotenv.config();
 
 // Initialize database adapter (works with both PostgreSQL and SQLite)
@@ -150,7 +154,7 @@ const corsOptions = {
     process.env.CLIENT_URL,
   ].filter(Boolean),
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
     "user-id",
@@ -166,6 +170,14 @@ const corsOptions = {
 // Apply CORS before other middleware
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// --- Authentication Routes ---
+// Initialize auth routes with database
+const authRouter = initAuthRoutes(dbAdapter.db, getDbType());
+app.use("/api/auth", authRouter);
+
+// Add security headers middleware
+app.use(authMiddleware.securityHeaders);
 
 // Rate limiting for AI endpoints (10 requests per minute per user)
 const aiRateLimiter = rateLimit({
@@ -402,6 +414,110 @@ app.get("/health", async (req, res) => {
       status: "error",
       message: "Service unavailable",
       details: error.message,
+    });
+  }
+});
+
+// --- Contact Form Endpoint ---
+app.post("/api/contact", async (req, res) => {
+  try {
+    const { name, email, message } = req.body;
+
+    // Validation
+    if (!name || !email || !message) {
+      return res.status(400).json({
+        error: "Please provide name, email, and message",
+      });
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        error: "Please provide a valid email address",
+      });
+    }
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedMessage = message.trim();
+
+    // Create table if not exists
+    const createTableQuery =
+      getDbType() === "sqlite"
+        ? `CREATE TABLE IF NOT EXISTS contact_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            message TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            is_read INTEGER DEFAULT 0
+          )`
+        : `CREATE TABLE IF NOT EXISTS contact_messages (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            is_read BOOLEAN DEFAULT FALSE
+          )`;
+
+    await pool.query(createTableQuery);
+
+    // Insert the contact message
+    const insertQuery =
+      getDbType() === "sqlite"
+        ? `INSERT INTO contact_messages (name, email, message) VALUES (?, ?, ?)`
+        : `INSERT INTO contact_messages (name, email, message) VALUES ($1, $2, $3) RETURNING id`;
+
+    const result = await pool.query(insertQuery, [
+      trimmedName,
+      trimmedEmail,
+      trimmedMessage,
+    ]);
+
+    console.log(
+      `New contact form submission from: ${trimmedName} (${trimmedEmail})`
+    );
+
+    // Send email notifications using emailUtils
+    const emailUtils = require("./auth/emailUtils");
+
+    if (emailUtils.isEmailConfigured()) {
+      try {
+        // Send notification to admin
+        await emailUtils.sendContactNotification(
+          trimmedName,
+          trimmedEmail,
+          trimmedMessage
+        );
+
+        // Send auto-reply to user
+        await emailUtils.sendContactAutoReply(
+          trimmedName,
+          trimmedEmail,
+          trimmedMessage
+        );
+
+        console.log("Contact form emails sent successfully");
+      } catch (emailError) {
+        console.error("Failed to send contact form email:", emailError);
+        // Don't fail the request if email fails - message is still saved to DB
+      }
+    } else {
+      console.log(
+        "[DEV MODE] Email notification would be sent for contact form"
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Your message has been received. We'll get back to you soon!",
+    });
+  } catch (error) {
+    console.error("Contact form error:", error);
+    res.status(500).json({
+      error: "Failed to process your message. Please try again later.",
     });
   }
 });
@@ -1821,13 +1937,14 @@ app.post(
       // Save quiz to database
       const quizTitle = `${contentType.toUpperCase()} Quiz - ${new Date().toLocaleDateString()}`;
 
-      const dbResult = await pool.query(
-        `INSERT INTO quizzes (
-        user_id, title, topic, num_questions, difficulty, 
-        question_type, questions, language
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id`,
-        [
+      let quizId;
+      if (getDbType() === "sqlite") {
+        const insertQuery = `INSERT INTO quizzes (
+            user_id, title, topic, num_questions, difficulty, 
+            question_type, questions, language
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+
+        const insertResult = await pool.query(insertQuery, [
           req.user.userId,
           quizTitle,
           options.topic,
@@ -1836,13 +1953,35 @@ app.post(
           options.questionType,
           JSON.stringify(result.questions),
           options.language,
-        ]
-      );
+        ]);
+        // SQLite returns insertId from the query adapter
+        quizId = insertResult.insertId;
+        console.log("Quiz saved to SQLite, quizId:", quizId);
+      } else {
+        const dbResult = await pool.query(
+          `INSERT INTO quizzes (
+            user_id, title, topic, num_questions, difficulty, 
+            question_type, questions, language
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id`,
+          [
+            req.user.userId,
+            quizTitle,
+            options.topic,
+            result.questions.length,
+            options.difficulty,
+            options.questionType,
+            JSON.stringify(result.questions),
+            options.language,
+          ]
+        );
+        quizId = dbResult.rows[0].id;
+      }
 
       res.json({
         status: "success",
         message: "Quiz generated successfully from content",
-        quizId: dbResult.rows[0].id,
+        quizId: quizId,
         questions: result.questions,
         extractedTextLength: result.extractedTextLength,
         contentType: result.contentType,
@@ -1885,13 +2024,14 @@ app.post("/api/generate-from-youtube", simpleAuth, async (req, res, next) => {
     // Save quiz to database
     const quizTitle = `YouTube Quiz - ${new Date().toLocaleDateString()}`;
 
-    const dbResult = await pool.query(
-      `INSERT INTO quizzes (
-        user_id, title, topic, num_questions, difficulty, 
-        question_type, questions, language
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id`,
-      [
+    let quizId;
+    if (getDbType() === "sqlite") {
+      const insertQuery = `INSERT INTO quizzes (
+          user_id, title, topic, num_questions, difficulty, 
+          question_type, questions, language
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+
+      const insertResult = await pool.query(insertQuery, [
         req.user.userId,
         quizTitle,
         options.topic,
@@ -1900,13 +2040,35 @@ app.post("/api/generate-from-youtube", simpleAuth, async (req, res, next) => {
         options.questionType,
         JSON.stringify(result.questions),
         options.language,
-      ]
-    );
+      ]);
+      // SQLite returns insertId from the query adapter
+      quizId = insertResult.insertId;
+      console.log("YouTube Quiz saved to SQLite, quizId:", quizId);
+    } else {
+      const dbResult = await pool.query(
+        `INSERT INTO quizzes (
+          user_id, title, topic, num_questions, difficulty, 
+          question_type, questions, language
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id`,
+        [
+          req.user.userId,
+          quizTitle,
+          options.topic,
+          result.questions.length,
+          options.difficulty,
+          options.questionType,
+          JSON.stringify(result.questions),
+          options.language,
+        ]
+      );
+      quizId = dbResult.rows[0].id;
+    }
 
     res.json({
       status: "success",
       message: "Quiz generated successfully from video",
-      quizId: dbResult.rows[0].id,
+      quizId: quizId,
       questions: result.questions,
       extractedTextLength: result.extractedTextLength,
     });

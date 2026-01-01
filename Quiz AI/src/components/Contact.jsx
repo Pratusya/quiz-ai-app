@@ -9,10 +9,9 @@ import {
   User,
   Send,
   MapPin,
-  Phone,
   Clock,
   Sparkles,
-  CheckCircle,
+  Headphones,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -25,6 +24,8 @@ import {
   CardDescription,
 } from "./ui/card";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 function Contact() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -35,35 +36,51 @@ function Contact() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/contact`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, email, message }),
+      });
 
-    console.log({ name, email, message });
-    toast.success("Message sent successfully! We'll get back to you soon.");
-    setName("");
-    setEmail("");
-    setMessage("");
-    setIsSubmitting(false);
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success("Message sent successfully! We'll get back to you soon.");
+        setName("");
+        setEmail("");
+        setMessage("");
+      } else {
+        toast.error(data.error || "Failed to send message. Please try again.");
+      }
+    } catch (error) {
+      console.error("Contact form error:", error);
+      toast.error("Failed to send message. Please try again later.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const contactInfo = [
     {
       icon: <Mail className="w-5 h-5" />,
       title: "Email Us",
-      value: "support@quizai.com",
+      value: "pratsuyaharsora@gmail.com",
       description: "We reply within 24 hours",
     },
     {
-      icon: <Phone className="w-5 h-5" />,
-      title: "Call Us",
-      value: "+1 (555) 123-4567",
-      description: "Mon-Fri, 9AM-6PM EST",
+      icon: <Headphones className="w-5 h-5" />,
+      title: "Support",
+      value: "24/7 Available",
+      description: "Chat support online",
     },
     {
       icon: <MapPin className="w-5 h-5" />,
       title: "Location",
-      value: "San Francisco, CA",
-      description: "United States",
+      value: "Gujarat, India",
+      description: "Asia Pacific",
     },
     {
       icon: <Clock className="w-5 h-5" />,
@@ -156,7 +173,7 @@ function Contact() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
-                    placeholder="John Doe"
+                    placeholder="Enter full name"
                     className="h-10 sm:h-11"
                   />
                 </div>
@@ -174,7 +191,7 @@ function Contact() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    placeholder="john@example.com"
+                    placeholder="Enter your email"
                     className="h-10 sm:h-11"
                   />
                 </div>

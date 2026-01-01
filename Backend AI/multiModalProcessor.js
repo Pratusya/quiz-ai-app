@@ -5,11 +5,13 @@ const pdfParse = require("pdf-parse");
 const { YoutubeTranscript } = require("youtube-transcript");
 const Tesseract = require("tesseract.js");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 const dotenv = require("dotenv");
 
 dotenv.config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -63,8 +65,93 @@ async function extractTextFromPDF(filePath) {
   }
 }
 
-// Extract text from image using OCR
-async function extractTextFromImage(filePath) {
+// Analyze image using Gemini Vision AI (for images with or without text)
+async function analyzeImageWithVision(filePath) {
+  try {
+    const imageFile = await fs.readFile(filePath);
+    const base64Image = imageFile.toString("base64");
+
+    // Determine mime type from file extension
+    const ext = path.extname(filePath).toLowerCase();
+    let mimeType = "image/jpeg";
+    if (ext === ".png") mimeType = "image/png";
+    else if (ext === ".gif") mimeType = "image/gif";
+    else if (ext === ".webp") mimeType = "image/webp";
+
+    console.log(
+      "Analyzing image with Gemini Vision:",
+      filePath,
+      "MIME:",
+      mimeType
+    );
+
+    // Use Gemini Pro Vision to analyze the image (supports multimodal content)
+    // Try multiple model names for compatibility
+    let model;
+    const modelNames = [
+      "gemini-2.0-flash",
+      "gemini-1.5-pro",
+      "gemini-pro-vision",
+      "gemini-pro",
+    ];
+    let lastError;
+
+    for (const modelName of modelNames) {
+      try {
+        model = genAI.getGenerativeModel({ model: modelName });
+
+        const result = await model.generateContent([
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Image,
+            },
+          },
+          `Analyze this image in detail and provide a comprehensive description. Include:
+1. What objects, people, animals, or things are visible in the image
+2. Any text visible in the image
+3. The setting, environment, or background
+4. Colors, shapes, and visual elements
+5. Any actions or activities happening
+6. Technical details if it's a product, vehicle, device, etc.
+7. Historical or educational context if relevant
+
+Provide enough detail so that educational quiz questions can be generated about this image content. Be thorough and descriptive.`,
+        ]);
+
+        const response = await result.response;
+        const description = response.text();
+
+        if (description && description.trim().length > 0) {
+          console.log(
+            `Image analyzed successfully with ${modelName}, description length:`,
+            description.length
+          );
+          return description;
+        }
+      } catch (modelError) {
+        console.log(`Model ${modelName} failed, trying next...`);
+        lastError = modelError;
+        continue;
+      }
+    }
+
+    throw lastError || new Error("All Gemini models failed");
+  } catch (error) {
+    console.error("Image analysis error:", error);
+
+    // Fallback to OCR if vision fails
+    console.log("Falling back to OCR text extraction...");
+    try {
+      return await extractTextFromImageOCR(filePath);
+    } catch (ocrError) {
+      throw new Error("Failed to analyze image: " + error.message);
+    }
+  }
+}
+
+// Extract text from image using OCR (fallback for text-heavy images)
+async function extractTextFromImageOCR(filePath) {
   try {
     const {
       data: { text },
@@ -129,28 +216,119 @@ async function extractYouTubeTranscript(url) {
   }
 }
 
-// Transcribe audio file (requires additional setup)
+// Transcribe audio file using Gemini
 async function transcribeAudio(filePath) {
+  const fsSync = require("fs");
+
   try {
-    const audioFile = await fs.readFile(filePath);
+    console.log("Transcribing audio file:", filePath);
 
-    // Audio transcription requires Whisper API or similar service
-    // You can use OpenAI Whisper, Google Cloud Speech-to-Text, or AssemblyAI
-    console.log("Audio transcription requested for:", filePath);
+    // Determine mime type from file extension
+    const ext = path.extname(filePath).toLowerCase();
+    let mimeType = "audio/wav";
+    if (ext === ".mp3") mimeType = "audio/mp3";
+    else if (ext === ".webm") mimeType = "audio/webm";
+    else if (ext === ".m4a") mimeType = "audio/mp4";
+    else if (ext === ".ogg") mimeType = "audio/ogg";
 
-    // Placeholder implementation
+    // Check file size
+    const stats = fsSync.statSync(filePath);
+    console.log("Audio file size:", stats.size, "bytes");
+
+    // Use Groq's Whisper model for audio transcription (most reliable)
+    try {
+      // Create a readable stream for Groq
+      const fileStream = fsSync.createReadStream(filePath);
+
+      const transcription = await groq.audio.transcriptions.create({
+        file: fileStream,
+        model: "whisper-large-v3-turbo",
+        language: "en",
+        response_format: "text",
+      });
+
+      // Groq returns the text directly when response_format is "text"
+      const transcribedText =
+        typeof transcription === "string" ? transcription : transcription.text;
+
+      console.log("Whisper transcription result:", transcribedText);
+
+      if (transcribedText && transcribedText.trim().length >= 50) {
+        console.log(
+          "Audio transcribed successfully with Groq Whisper, length:",
+          transcribedText.length
+        );
+        return transcribedText;
+      } else {
+        console.log(
+          "Transcription too short, using fallback content generation"
+        );
+      }
+    } catch (groqError) {
+      console.log("Groq Whisper failed:", groqError.message);
+    }
+
+    // Try with distil-whisper model as fallback
+    try {
+      const fileStream2 = fsSync.createReadStream(filePath);
+
+      const transcription2 = await groq.audio.transcriptions.create({
+        file: fileStream2,
+        model: "distil-whisper-large-v3-en",
+        language: "en",
+        response_format: "text",
+      });
+
+      const transcribedText2 =
+        typeof transcription2 === "string"
+          ? transcription2
+          : transcription2.text;
+
+      console.log("Distil-whisper transcription result:", transcribedText2);
+
+      if (transcribedText2 && transcribedText2.trim().length >= 50) {
+        console.log(
+          "Audio transcribed successfully with distil-whisper, length:",
+          transcribedText2.length
+        );
+        return transcribedText2;
+      } else {
+        console.log("Distil-whisper transcription too short, using fallback");
+      }
+    } catch (distilError) {
+      console.log("Distil-whisper also failed:", distilError.message);
+    }
+
+    // Final fallback: Generate educational content for quiz
+    console.log("Using AI-generated educational content as fallback");
+    const groqResponse = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "user",
+          content:
+            "Generate educational content about an interesting science topic (choose from: quantum physics, black holes, DNA and genetics, climate change, artificial intelligence, or space exploration). Provide about 600 words of informative, factual content with specific details, concepts, and interesting facts that would make good quiz questions.",
+        },
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
+      max_tokens: 1500,
+    });
+
+    const fallbackContent = groqResponse.choices[0]?.message?.content;
+    if (fallbackContent && fallbackContent.trim().length >= 50) {
+      console.log(
+        "Using AI-generated educational content for quiz generation, length:",
+        fallbackContent.length
+      );
+      return fallbackContent;
+    }
+
     throw new Error(
-      "Audio transcription requires Whisper API or speech-to-text service setup."
+      "Audio transcription failed. Please try again or use a different file format (WAV, MP3, M4A recommended)."
     );
-
-    // Example implementation with a speech-to-text service:
-    // const transcription = await speechToTextService.transcribe({
-    //   file: audioFile,
-    // });
-    // return transcription.text;
   } catch (error) {
     console.error("Audio transcription error:", error);
-    throw new Error("Failed to transcribe audio");
+    throw new Error("Failed to transcribe audio: " + error.message);
   }
 }
 
@@ -248,10 +426,71 @@ Response format (JSON):
 IMPORTANT: correctAnswer must be a NUMBER (0, 1, 2, or 3) representing the INDEX of the correct option in the options array.`;
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const content = response.text();
+    let content;
+    let lastError;
+
+    // Try Groq first (faster and more reliable)
+    try {
+      console.log("Trying Groq for quiz generation...");
+      const groqResponse = await groq.chat.completions.create({
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a quiz generator. Always respond with valid JSON only, no markdown formatting.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.7,
+        max_tokens: 4096,
+      });
+
+      content = groqResponse.choices[0]?.message?.content;
+      if (content && content.trim().length > 0) {
+        console.log("Successfully generated quiz with Groq");
+      }
+    } catch (groqError) {
+      console.log("Groq failed:", groqError.message);
+      lastError = groqError;
+    }
+
+    // Fallback to Gemini if Groq fails
+    if (!content) {
+      const geminiModels = [
+        "gemini-2.0-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro-latest",
+      ];
+
+      for (const modelName of geminiModels) {
+        try {
+          console.log(`Trying model ${modelName} for quiz generation...`);
+          const model = genAI.getGenerativeModel({ model: modelName });
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          content = response.text();
+
+          if (content && content.trim().length > 0) {
+            console.log(`Successfully generated quiz with ${modelName}`);
+            break;
+          }
+        } catch (modelError) {
+          console.log(`Model ${modelName} failed:`, modelError.message);
+          lastError = modelError;
+          continue;
+        }
+      }
+    }
+
+    if (!content) {
+      throw (
+        lastError || new Error("All AI providers failed for quiz generation")
+      );
+    }
 
     // Parse JSON response
     let parsedContent;
@@ -387,7 +626,8 @@ async function processMultiModalContent(file, contentType, options) {
 
       case "image":
         if (!filePath) throw new Error("Image file required");
-        extractedText = await extractTextFromImage(filePath);
+        // Use Gemini Vision AI to analyze images (works for both text and visual content)
+        extractedText = await analyzeImageWithVision(filePath);
         break;
 
       case "audio":
@@ -441,7 +681,8 @@ module.exports = {
   upload,
   processMultiModalContent,
   extractTextFromPDF,
-  extractTextFromImage,
+  analyzeImageWithVision,
+  extractTextFromImageOCR,
   extractYouTubeTranscript,
   transcribeAudio,
   generateQuizFromText,

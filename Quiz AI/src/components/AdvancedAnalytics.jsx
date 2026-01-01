@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { Navigate } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
-import { useAuth, RedirectToSignIn } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import {
@@ -19,7 +20,8 @@ import {
 } from "react-icons/fa";
 
 const AdvancedAnalytics = () => {
-  const { isSignedIn, userId } = useAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
+  const userId = user?.id;
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -135,8 +137,8 @@ const AdvancedAnalytics = () => {
     return { trend: "stable", icon: FaEquals, color: "text-gray-500" };
   };
 
-  if (!isSignedIn) {
-    return <RedirectToSignIn />;
+  if (!authLoading && !isAuthenticated) {
+    return <Navigate to="/login" replace />;
   }
 
   if (loading) {

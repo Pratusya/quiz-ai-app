@@ -193,7 +193,6 @@ async function createPostgresTables() {
       CREATE TABLE IF NOT EXISTS ai_tutor_interactions (
         id SERIAL PRIMARY KEY,
         user_id TEXT NOT NULL,
-        clerk_id TEXT,
         quiz_id INTEGER REFERENCES quizzes(id) ON DELETE SET NULL,
         question TEXT,
         user_answer TEXT,
@@ -203,8 +202,41 @@ async function createPostgresTables() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- Authentication users table
+      CREATE TABLE IF NOT EXISTS auth_users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE,
+        username VARCHAR(100) NOT NULL,
+        password_hash TEXT,
+        oauth_provider VARCHAR(20),
+        oauth_provider_id TEXT,
+        avatar_url TEXT,
+        role VARCHAR(20) DEFAULT 'user',
+        email_verified BOOLEAN DEFAULT FALSE,
+        phone_number VARCHAR(20) UNIQUE,
+        phone_verified BOOLEAN DEFAULT FALSE,
+        verification_token_hash TEXT,
+        verification_token_expires TIMESTAMP WITH TIME ZONE,
+        reset_token_hash TEXT,
+        reset_token_expires TIMESTAMP WITH TIME ZONE,
+        last_login TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Refresh tokens table
+      CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES auth_users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL,
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Create indexes
       CREATE INDEX IF NOT EXISTS idx_quizzes_user_id ON quizzes(user_id);
+      CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth_users(email);
+      CREATE INDEX IF NOT EXISTS idx_auth_users_oauth ON auth_users(oauth_provider, oauth_provider_id);
       CREATE INDEX IF NOT EXISTS idx_quiz_results_user_id ON quiz_results(user_id);
       CREATE INDEX IF NOT EXISTS idx_quiz_results_quiz_id ON quiz_results(quiz_id);
       CREATE INDEX IF NOT EXISTS idx_user_gamification_user_id ON user_gamification(user_id);
@@ -350,7 +382,6 @@ function createSQLiteTables() {
     CREATE TABLE IF NOT EXISTS ai_tutor_interactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
-      clerk_id TEXT NOT NULL,
       quiz_id INTEGER,
       question TEXT NOT NULL,
       user_answer TEXT,
@@ -358,8 +389,39 @@ function createSQLiteTables() {
       explanation TEXT,
       follow_up_questions TEXT DEFAULT '[]',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE SET NULL
+    );
+
+    -- Authentication users table
+    CREATE TABLE IF NOT EXISTS auth_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE,
+      username TEXT NOT NULL,
+      password_hash TEXT,
+      oauth_provider TEXT,
+      oauth_provider_id TEXT,
+      avatar_url TEXT,
+      role TEXT DEFAULT 'user',
+      email_verified INTEGER DEFAULT 0,
+      phone_number TEXT UNIQUE,
+      phone_verified INTEGER DEFAULT 0,
+      verification_token_hash TEXT,
+      verification_token_expires DATETIME,
+      reset_token_hash TEXT,
+      reset_token_expires DATETIME,
+      last_login DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Refresh tokens table
+    CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
     );
 
     -- Leaderboard table
@@ -429,7 +491,6 @@ function createSQLiteTables() {
     );
 
     -- Create indexes
-    CREATE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id);
     CREATE INDEX IF NOT EXISTS idx_quizzes_user_id ON quizzes(user_id);
     CREATE INDEX IF NOT EXISTS idx_quiz_results_user_id ON quiz_results(user_id);
     CREATE INDEX IF NOT EXISTS idx_quiz_results_quiz_id ON quiz_results(quiz_id);
@@ -440,6 +501,8 @@ function createSQLiteTables() {
     CREATE INDEX IF NOT EXISTS idx_user_learning_analytics_user_id ON user_learning_analytics(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_learning_analytics_topic ON user_learning_analytics(topic);
     CREATE INDEX IF NOT EXISTS idx_quiz_history_user_id ON quiz_history(user_id);
+    CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth_users(email);
+    CREATE INDEX IF NOT EXISTS idx_auth_users_oauth ON auth_users(oauth_provider, oauth_provider_id);
   `;
 
   // Execute each statement separately
@@ -457,10 +520,56 @@ function createSQLiteTables() {
     }
   });
 
+  // Run migrations to add missing columns to existing tables
+  runSQLiteMigrations();
+
   console.log("✅ SQLite tables created successfully");
 
   // Seed initial badges if they don't exist
   seedBadges();
+}
+
+// Run migrations for SQLite to add missing columns
+function runSQLiteMigrations() {
+  const migrations = [
+    // Add phone_number column to auth_users if it doesn't exist (without UNIQUE constraint)
+    {
+      check:
+        "SELECT COUNT(*) as count FROM pragma_table_info('auth_users') WHERE name='phone_number'",
+      alter: "ALTER TABLE auth_users ADD COLUMN phone_number TEXT",
+    },
+    // Add phone_verified column to auth_users if it doesn't exist
+    {
+      check:
+        "SELECT COUNT(*) as count FROM pragma_table_info('auth_users') WHERE name='phone_verified'",
+      alter:
+        "ALTER TABLE auth_users ADD COLUMN phone_verified INTEGER DEFAULT 0",
+    },
+  ];
+
+  migrations.forEach(({ check, alter }) => {
+    try {
+      const result = db.prepare(check).get();
+      if (result.count === 0) {
+        db.exec(alter);
+        console.log(`✅ Migration applied: ${alter.substring(0, 50)}...`);
+      }
+    } catch (err) {
+      // Ignore errors - column might already exist
+      if (!err.message.includes("duplicate column name")) {
+        console.error("Migration error:", err.message);
+      }
+    }
+  });
+
+  // Create unique index for phone_number (provides uniqueness enforcement)
+  try {
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_users_phone ON auth_users(phone_number) WHERE phone_number IS NOT NULL"
+    );
+  } catch (err) {
+    // Index might already exist, ignore
+  }
 }
 
 // Seed badges table with default badges
@@ -572,14 +681,20 @@ async function query(text, params = []) {
     // Convert PostgreSQL numbered parameters ($1, $2) to SQLite placeholders (?)
     // Handle cases where the same parameter is used multiple times (e.g., $1 appears twice)
     const paramMatches = text.match(/\$(\d+)/g) || [];
-    const expandedParams = [];
+    let expandedParams = [];
 
-    paramMatches.forEach((match) => {
-      const paramIndex = parseInt(match.substring(1)) - 1; // $1 -> index 0
-      if (paramIndex >= 0 && paramIndex < params.length) {
-        expandedParams.push(params[paramIndex]);
-      }
-    });
+    if (paramMatches.length > 0) {
+      // PostgreSQL style parameters ($1, $2, etc.)
+      paramMatches.forEach((match) => {
+        const paramIndex = parseInt(match.substring(1)) - 1; // $1 -> index 0
+        if (paramIndex >= 0 && paramIndex < params.length) {
+          expandedParams.push(params[paramIndex]);
+        }
+      });
+    } else {
+      // Already using ? placeholders, use params directly
+      expandedParams = params;
+    }
 
     let sqliteText = text.replace(/\$\d+/g, "?");
 

@@ -18,19 +18,15 @@ import {
   Mail,
   ChevronDown,
 } from "lucide-react";
-import {
-  SignInButton,
-  SignUpButton,
-  UserButton,
-  useAuth,
-} from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
+import UserDropdown from "./UserDropdown";
 
 function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const location = useLocation();
-  const { isSignedIn } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
   // Handle scroll effect
   useEffect(() => {
@@ -136,28 +132,23 @@ function Navbar() {
 
               {/* Desktop Auth Buttons */}
               <div className="hidden md:flex items-center gap-2">
-                {isSignedIn ? (
-                  <UserButton
-                    afterSignOutUrl="/"
-                    appearance={{
-                      elements: {
-                        avatarBox: "w-10 h-10 ring-2 ring-primary/20",
-                      },
-                    }}
-                  />
+                {isLoading ? (
+                  <div className="w-10 h-10 rounded-xl bg-muted animate-pulse" />
+                ) : isAuthenticated ? (
+                  <UserDropdown />
                 ) : (
                   <>
-                    <SignInButton mode="modal">
+                    <Link to="/login">
                       <Button variant="ghost" size="sm">
                         Sign In
                       </Button>
-                    </SignInButton>
-                    <SignUpButton mode="modal">
+                    </Link>
+                    <Link to="/register">
                       <Button variant="gradient" size="sm" shimmer>
                         <Sparkles className="w-4 h-4 mr-1" />
                         Get Started
                       </Button>
-                    </SignUpButton>
+                    </Link>
                   </>
                 )}
               </div>
@@ -235,25 +226,33 @@ function Navbar() {
                   transition={{ delay: 0.3 }}
                   className="mt-6 pt-6 border-t border-border/50"
                 >
-                  {isSignedIn ? (
+                  {isAuthenticated ? (
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">
                         Signed in
                       </span>
-                      <UserButton afterSignOutUrl="/" />
+                      <UserDropdown />
                     </div>
                   ) : (
                     <div className="flex gap-3">
-                      <SignInButton mode="modal">
-                        <Button variant="outline" className="flex-1">
+                      <Link
+                        to="/login"
+                        className="flex-1"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <Button variant="outline" className="w-full">
                           Sign In
                         </Button>
-                      </SignInButton>
-                      <SignUpButton mode="modal">
-                        <Button variant="gradient" className="flex-1" shimmer>
+                      </Link>
+                      <Link
+                        to="/register"
+                        className="flex-1"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        <Button variant="gradient" className="w-full" shimmer>
                           Sign Up
                         </Button>
-                      </SignUpButton>
+                      </Link>
                     </div>
                   )}
                 </motion.div>

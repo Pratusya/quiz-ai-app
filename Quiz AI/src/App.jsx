@@ -2,11 +2,11 @@
 import React, { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Route, Routes, Link } from "react-router-dom";
 import { ThemeProvider } from "./components/ThemeProvider";
+import { AuthProvider } from "./context/AuthContext";
 import Layout from "./components/Layout";
 import { Toaster } from "react-hot-toast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import LoadingSpinner, { FullPageLoader } from "./components/LoadingSpinner";
-import { ClerkProvider } from "@clerk/clerk-react";
 import { motion } from "framer-motion";
 import { Home as HomeIcon, ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "./components/ui/button";
@@ -25,17 +25,24 @@ const MultiModalQuizGenerator = lazy(() =>
 );
 const MultiplayerQuiz = lazy(() => import("./components/MultiplayerQuiz"));
 
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+// Auth components
+const Login = lazy(() => import("./components/Login"));
+const Register = lazy(() => import("./components/Register"));
+const ForgotPassword = lazy(() => import("./components/ForgotPassword"));
+const ResetPassword = lazy(() => import("./components/ResetPassword"));
+const AuthCallback = lazy(() => import("./components/AuthCallback"));
+const VerifyEmail = lazy(() => import("./components/VerifyEmail"));
 
-if (!clerkPubKey) {
-  throw new Error("Missing Clerk Publishable Key");
-}
+// User account components
+const Profile = lazy(() => import("./components/Profile"));
+const Settings = lazy(() => import("./components/Settings"));
+const Security = lazy(() => import("./components/Security"));
 
 function App() {
   return (
-    <ClerkProvider publishableKey={clerkPubKey}>
-      <ErrorBoundary>
-        <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+        <AuthProvider>
           <Router
             future={{
               v7_startTransition: true,
@@ -48,6 +55,19 @@ function App() {
                   {/* Main routes */}
                   <Route path="/" element={<Home />} />
                   <Route path="/generate-quiz" element={<QuizGenerator />} />
+
+                  {/* Auth routes */}
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/verify-email" element={<VerifyEmail />} />
+                  <Route path="/auth/callback" element={<AuthCallback />} />
+
+                  {/* User account routes */}
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/settings/security" element={<Security />} />
 
                   {/* New Feature Routes */}
                   <Route
@@ -94,9 +114,9 @@ function App() {
               },
             }}
           />
-        </ThemeProvider>
-      </ErrorBoundary>
-    </ClerkProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

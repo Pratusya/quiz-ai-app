@@ -61,14 +61,15 @@ import {
 } from "./ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { ScrollArea } from "./ui/scroll-area";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const MultiplayerQuiz = () => {
-  const { isSignedIn, userId } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const userId = user?.id;
   const [socket, setSocket] = useState(null);
   const [username, setUsername] = useState("");
   const [roomCode, setRoomCode] = useState("");

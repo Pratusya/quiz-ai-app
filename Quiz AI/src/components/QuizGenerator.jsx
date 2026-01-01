@@ -19,7 +19,8 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { useAuth, RedirectToSignIn } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
+import { Navigate } from "react-router-dom";
 import {
   WhatsappShareButton,
   FacebookShareButton,
@@ -244,7 +245,8 @@ const normalizeQuizData = (quizData, questionType) => {
 };
 
 function QuizGenerator() {
-  const { isSignedIn, userId } = useAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
+  const userId = user?.id;
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -304,14 +306,43 @@ function QuizGenerator() {
   });
   const [lockedAnswers, setLockedAnswers] = useState(new Set());
 
-  // Effect to handle retake mode initialization
+  // Effect to handle retake mode initialization - runs when location.state changes
   useEffect(() => {
-    if (isRetakeMode && retakeData) {
-      toast.success(`Quiz loaded for retaking: ${retakeData.topic}`);
-      // Clear the navigation state to prevent re-initialization
+    const newRetakeData = location.state?.retakeMode
+      ? location.state.quizData
+      : null;
+
+    if (newRetakeData) {
+      console.log("Retake mode detected, setting up quiz:", newRetakeData);
+
+      // Set all the states from retake data
+      setTopic(newRetakeData.topic || "");
+      setNumQuestions(newRetakeData.numQuestions || 5);
+      setDifficulty(newRetakeData.difficulty || "Easy");
+      setQuestionType(newRetakeData.questionType || "MCQ");
+      setLanguage(newRetakeData.language || "english");
+      setQuestionLanguage(newRetakeData.language || "english");
+      setQuizId(newRetakeData.id || null);
+      setIsRetakeMode(true);
+      setUserAnswers({});
+      setLockedAnswers(new Set());
+
+      // Normalize and set the quiz data
+      if (newRetakeData.questions) {
+        const normalized = normalizeQuizData(
+          newRetakeData.questions,
+          newRetakeData.questionType || "MCQ"
+        );
+        setQuiz(normalized);
+        console.log("Quiz data set:", normalized);
+      }
+
+      toast.success(`Quiz loaded: ${newRetakeData.topic}`);
+
+      // Clear the navigation state to prevent re-initialization on refresh
       window.history.replaceState({}, "", window.location.pathname);
     }
-  }, [isRetakeMode, retakeData]);
+  }, [location.state]);
 
   // Function to get adaptive learning recommendations
   const getAdaptiveRecommendation = async (topic) => {
@@ -373,8 +404,8 @@ function QuizGenerator() {
     };
   }, []);
 
-  if (!isSignedIn) {
-    return <RedirectToSignIn />;
+  if (!authLoading && !isAuthenticated) {
+    return <Navigate to="/login" replace />;
   }
 
   if (error) {
@@ -645,7 +676,7 @@ function QuizGenerator() {
       // setUserAnswers({});
 
       // Save quiz only if user is signed in
-      if (isSignedIn && userId) {
+      if (isAuthenticated && userId) {
         try {
           const savedQuizId = await saveQuiz(normalizedQuizData);
           if (savedQuizId) {
@@ -1029,7 +1060,7 @@ function QuizGenerator() {
   return (
     <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
       {/* Guest User Banner */}
-      {!isSignedIn && (
+      {!isAuthenticated && (
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <div className="flex items-center gap-3">
             <span className="text-2xl">👋</span>

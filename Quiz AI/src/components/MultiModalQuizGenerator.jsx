@@ -33,15 +33,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { useNavigate } from "react-router-dom";
-import { useAuth, RedirectToSignIn } from "@clerk/clerk-react";
+import { useNavigate, Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { toast } from "react-hot-toast";
 import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 const MultiModalQuizGenerator = () => {
-  const { isSignedIn, userId } = useAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
+  const userId = user?.id;
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [contentType, setContentType] = useState("pdf");
@@ -70,8 +71,8 @@ const MultiModalQuizGenerator = () => {
   const [generatedQuiz, setGeneratedQuiz] = useState(null);
 
   // Redirect to sign in if not authenticated
-  if (!isSignedIn) {
-    return <RedirectToSignIn />;
+  if (!authLoading && !isAuthenticated) {
+    return <Navigate to="/login" replace />;
   }
 
   const handleFileUpload = async (e) => {
@@ -370,24 +371,30 @@ const MultiModalQuizGenerator = () => {
   };
 
   const startQuiz = () => {
+    console.log("startQuiz called, generatedQuiz:", generatedQuiz);
     if (generatedQuiz?.quizId) {
+      const quizData = {
+        id: generatedQuiz.quizId,
+        questions: generatedQuiz.questions,
+        topic: quizConfig.customTopic || quizConfig.topic || "General",
+        difficulty: quizConfig.difficulty,
+        questionType: quizConfig.questionType,
+        numQuestions:
+          generatedQuiz.questions?.length || quizConfig.numQuestions,
+        language: "english",
+      };
+      console.log("Navigating to /generate-quiz with quizData:", quizData);
+
       // Navigate to quiz generator with the generated quiz data
-      // Using retakeMode format expected by QuizGenerator
       navigate("/generate-quiz", {
         state: {
           retakeMode: true,
-          quizData: {
-            id: generatedQuiz.quizId,
-            questions: generatedQuiz.questions,
-            topic: quizConfig.customTopic || quizConfig.topic || "General",
-            difficulty: quizConfig.difficulty,
-            questionType: quizConfig.questionType,
-            numQuestions:
-              generatedQuiz.questions?.length || quizConfig.numQuestions,
-            language: "english",
-          },
+          quizData: quizData,
         },
       });
+    } else {
+      console.error("Cannot start quiz - no quizId found:", generatedQuiz);
+      toast.error("Quiz not ready. Please generate a quiz first.");
     }
   };
 
@@ -419,20 +426,23 @@ const MultiModalQuizGenerator = () => {
 
   // Quiz Options Configuration Panel
   const QuizOptionsPanel = () => (
-    <Card className="mt-6 border-2 border-purple-200 dark:border-purple-800">
-      <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20">
-        <CardTitle className="flex items-center gap-2 text-xl">
-          <Settings className="h-5 w-5 text-purple-600" />
+    <Card className="mt-4 sm:mt-6 border-2 border-purple-200 dark:border-purple-800">
+      <CardHeader className="p-4 sm:p-6 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20">
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
+          <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0" />
           Quiz Configuration
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-xs sm:text-sm">
           Customize how your quiz will be generated
         </CardDescription>
       </CardHeader>
-      <CardContent className="pt-6 space-y-6">
+      <CardContent className="p-4 sm:pt-6 space-y-4 sm:space-y-6">
         {/* Question Type Selection */}
-        <div className="space-y-2">
-          <Label htmlFor="questionType" className="text-base font-medium">
+        <div className="space-y-1.5 sm:space-y-2">
+          <Label
+            htmlFor="questionType"
+            className="text-sm sm:text-base font-medium"
+          >
             Question Type
           </Label>
           <Select
@@ -441,7 +451,7 @@ const MultiModalQuizGenerator = () => {
               setQuizConfig((prev) => ({ ...prev, questionType: value }))
             }
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full text-sm sm:text-base">
               <SelectValue placeholder="Select question type" />
             </SelectTrigger>
             <SelectContent>
@@ -455,8 +465,11 @@ const MultiModalQuizGenerator = () => {
         </div>
 
         {/* Number of Questions */}
-        <div className="space-y-2">
-          <Label htmlFor="numQuestions" className="text-base font-medium">
+        <div className="space-y-1.5 sm:space-y-2">
+          <Label
+            htmlFor="numQuestions"
+            className="text-sm sm:text-base font-medium"
+          >
             Number of Questions
           </Label>
           <Select
@@ -468,7 +481,7 @@ const MultiModalQuizGenerator = () => {
               }))
             }
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full text-sm sm:text-base">
               <SelectValue placeholder="Select number of questions" />
             </SelectTrigger>
             <SelectContent>
@@ -482,8 +495,11 @@ const MultiModalQuizGenerator = () => {
         </div>
 
         {/* Difficulty Level */}
-        <div className="space-y-2">
-          <Label htmlFor="difficulty" className="text-base font-medium">
+        <div className="space-y-1.5 sm:space-y-2">
+          <Label
+            htmlFor="difficulty"
+            className="text-sm sm:text-base font-medium"
+          >
             Difficulty Level
           </Label>
           <Select
@@ -492,7 +508,7 @@ const MultiModalQuizGenerator = () => {
               setQuizConfig((prev) => ({ ...prev, difficulty: value }))
             }
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full text-sm sm:text-base">
               <SelectValue placeholder="Select difficulty" />
             </SelectTrigger>
             <SelectContent>
@@ -504,8 +520,8 @@ const MultiModalQuizGenerator = () => {
         </div>
 
         {/* Topic Selection */}
-        <div className="space-y-2">
-          <Label htmlFor="topic" className="text-base font-medium">
+        <div className="space-y-1.5 sm:space-y-2">
+          <Label htmlFor="topic" className="text-sm sm:text-base font-medium">
             Select Topic from Content
           </Label>
           {detectedTopics.length > 0 ? (
@@ -519,7 +535,7 @@ const MultiModalQuizGenerator = () => {
                 }))
               }
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full text-sm sm:text-base">
                 <SelectValue placeholder="Choose a detected topic" />
               </SelectTrigger>
               <SelectContent>
@@ -538,13 +554,17 @@ const MultiModalQuizGenerator = () => {
               onChange={(e) =>
                 setQuizConfig((prev) => ({ ...prev, topic: e.target.value }))
               }
+              className="text-sm sm:text-base"
             />
           )}
         </div>
 
         {/* Custom Topic Override */}
-        <div className="space-y-2">
-          <Label htmlFor="customTopic" className="text-base font-medium">
+        <div className="space-y-1.5 sm:space-y-2">
+          <Label
+            htmlFor="customTopic"
+            className="text-sm sm:text-base font-medium"
+          >
             Or Enter Custom Topic (Optional)
           </Label>
           <Input
@@ -556,16 +576,17 @@ const MultiModalQuizGenerator = () => {
                 customTopic: e.target.value,
               }))
             }
+            className="text-sm sm:text-base"
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-[10px] sm:text-xs text-gray-500">
             Override detected topics with your own specific topic
           </p>
         </div>
 
         {/* Generate Quiz Button */}
-        <div className="pt-4 space-y-3">
+        <div className="pt-3 sm:pt-4 space-y-2 sm:space-y-3">
           <Button
-            className="w-full p-6 text-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+            className="w-full p-4 sm:p-6 text-sm sm:text-base md:text-lg bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
             onClick={
               contentType === "video"
                 ? generateYoutubeQuiz
@@ -577,17 +598,21 @@ const MultiModalQuizGenerator = () => {
           >
             {generatingQuiz ? (
               <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
                 Generating Quiz...
               </>
             ) : (
               <>
-                <BookOpen className="mr-2 h-5 w-5" />
+                <BookOpen className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                 Generate Quiz
               </>
             )}
           </Button>
-          <Button variant="outline" className="w-full" onClick={resetUpload}>
+          <Button
+            variant="outline"
+            className="w-full text-sm"
+            onClick={resetUpload}
+          >
             Upload Different File
           </Button>
         </div>
@@ -597,36 +622,40 @@ const MultiModalQuizGenerator = () => {
 
   // Generated Quiz Actions Panel
   const GeneratedQuizPanel = () => (
-    <Card className="mt-6 border-2 border-green-200 dark:border-green-800">
-      <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
-        <CardTitle className="flex items-center gap-2 text-xl text-green-700 dark:text-green-400">
-          <CheckCircle className="h-6 w-6" />
+    <Card className="mt-4 sm:mt-6 border-2 border-green-200 dark:border-green-800">
+      <CardHeader className="p-4 sm:p-6 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
+        <CardTitle className="flex items-center gap-2 text-lg sm:text-xl text-green-700 dark:text-green-400">
+          <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6" />
           Quiz Generated Successfully!
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-sm">
           {generatedQuiz?.questions?.length || 0} questions ready •{" "}
           {quizConfig.questionType} • {quizConfig.difficulty}
         </CardDescription>
       </CardHeader>
-      <CardContent className="pt-4 sm:pt-6 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+      <CardContent className="p-4 sm:pt-6 space-y-3 sm:space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Button
-            className="p-4 sm:p-6 text-base sm:text-lg bg-green-600 hover:bg-green-700"
+            className="p-4 sm:p-6 text-sm sm:text-lg bg-green-600 hover:bg-green-700"
             onClick={startQuiz}
           >
-            <Play className="mr-2 h-5 w-5" />
+            <Play className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
             Start Quiz Now
           </Button>
           <Button
             variant="outline"
-            className="p-6 text-lg"
+            className="p-4 sm:p-6 text-sm sm:text-lg"
             onClick={viewQuizDetails}
           >
-            <BookOpen className="mr-2 h-5 w-5" />
+            <BookOpen className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
             View Details
           </Button>
         </div>
-        <Button variant="ghost" className="w-full" onClick={resetUpload}>
+        <Button
+          variant="ghost"
+          className="w-full text-sm"
+          onClick={resetUpload}
+        >
           Generate Another Quiz
         </Button>
       </CardContent>
@@ -634,29 +663,31 @@ const MultiModalQuizGenerator = () => {
   );
 
   return (
-    <div className="w-full max-w-4xl mx-auto py-4 sm:py-8 px-4 sm:px-6">
-      <Card className="w-full">
+    <div className="w-full max-w-4xl mx-auto py-4 sm:py-6 md:py-8 px-3 sm:px-4 md:px-6">
+      <Card className="w-full overflow-hidden">
         <CardHeader className="p-4 sm:p-6">
-          <CardTitle className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+          <CardTitle className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent leading-tight">
             🚀 Multi-Modal Quiz Generator
           </CardTitle>
-          <CardDescription className="text-sm sm:text-base md:text-lg">
+          <CardDescription className="text-xs sm:text-sm md:text-base mt-1 sm:mt-2">
             Upload PDFs, videos, images, or audio to generate intelligent
             AI-powered quizzes
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 sm:p-6">
+        <CardContent className="p-3 sm:p-4 md:p-6">
           {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+            <Alert variant="destructive" className="mb-3 sm:mb-4">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <AlertDescription className="text-sm ml-2">
+                {error}
+              </AlertDescription>
             </Alert>
           )}
 
           {success && (
-            <Alert className="mb-4 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800 dark:text-green-400">
+            <Alert className="mb-3 sm:mb-4 bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800">
+              <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+              <AlertDescription className="text-sm text-green-800 dark:text-green-400 ml-2">
                 {success}
               </AlertDescription>
             </Alert>
@@ -672,53 +703,49 @@ const MultiModalQuizGenerator = () => {
             }}
             className="w-full"
           >
-            <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full gap-1">
+            <TabsList className="grid grid-cols-4 w-full h-auto p-1 gap-1">
               <TabsTrigger
                 value="pdf"
                 disabled={uploadComplete && contentType !== "pdf"}
-                className="text-xs sm:text-sm"
+                className="text-[10px] sm:text-xs md:text-sm py-2 px-1 sm:px-2 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1"
               >
-                <FileText className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />{" "}
-                <span className="hidden xs:inline">PDF</span>
-                <span className="xs:hidden">PDF</span>
+                <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>PDF</span>
               </TabsTrigger>
               <TabsTrigger
                 value="video"
                 disabled={uploadComplete && contentType !== "video"}
-                className="text-xs sm:text-sm"
+                className="text-[10px] sm:text-xs md:text-sm py-2 px-1 sm:px-2 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1"
               >
-                <Video className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />{" "}
-                <span className="hidden xs:inline">Video</span>
-                <span className="xs:hidden">Video</span>
+                <Video className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>Video</span>
               </TabsTrigger>
               <TabsTrigger
                 value="image"
                 disabled={uploadComplete && contentType !== "image"}
-                className="text-xs sm:text-sm"
+                className="text-[10px] sm:text-xs md:text-sm py-2 px-1 sm:px-2 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1"
               >
-                <Image className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />{" "}
-                <span className="hidden xs:inline">Image</span>
-                <span className="xs:hidden">Image</span>
+                <Image className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>Image</span>
               </TabsTrigger>
               <TabsTrigger
                 value="audio"
                 disabled={uploadComplete && contentType !== "audio"}
-                className="text-xs sm:text-sm"
+                className="text-[10px] sm:text-xs md:text-sm py-2 px-1 sm:px-2 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1"
               >
-                <Mic className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />{" "}
-                <span className="hidden xs:inline">Audio</span>
-                <span className="xs:hidden">Audio</span>
+                <Mic className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span>Audio</span>
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="pdf" className="mt-4 sm:mt-6">
               {!uploadComplete ? (
-                <div className="border-2 border-dashed rounded-lg p-6 sm:p-12 text-center hover:border-purple-400 transition-colors">
-                  <Upload className="mx-auto h-10 w-10 sm:h-16 sm:w-16 text-gray-400 mb-3 sm:mb-4" />
-                  <p className="text-base sm:text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div className="border-2 border-dashed rounded-lg p-4 sm:p-8 md:p-12 text-center hover:border-purple-400 transition-colors">
+                  <Upload className="mx-auto h-8 w-8 sm:h-12 sm:w-12 md:h-16 md:w-16 text-gray-400 mb-2 sm:mb-4" />
+                  <p className="text-sm sm:text-base md:text-lg font-medium text-gray-700 dark:text-gray-300 mb-1 sm:mb-2">
                     Upload PDF Documents
                   </p>
-                  <p className="text-sm text-gray-500 mb-4">
+                  <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
                     Max file size: 50MB | Supported: .pdf
                   </p>
                   <input
@@ -731,7 +758,7 @@ const MultiModalQuizGenerator = () => {
                   />
                   <label htmlFor="pdf-upload">
                     <Button
-                      className="mt-4"
+                      className="mt-2 sm:mt-4 text-sm"
                       variant="outline"
                       disabled={loading}
                       asChild
@@ -739,12 +766,12 @@ const MultiModalQuizGenerator = () => {
                       <span>
                         {loading ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                             Processing...
                           </>
                         ) : (
                           <>
-                            <FileText className="mr-2 h-4 w-4" />
+                            <FileText className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                             Choose PDF File
                           </>
                         )}
@@ -752,19 +779,19 @@ const MultiModalQuizGenerator = () => {
                     </Button>
                   </label>
                   {file && contentType === "pdf" && (
-                    <p className="mt-4 text-sm text-gray-600">
+                    <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-gray-600 break-all px-2">
                       Selected: {file.name}
                     </p>
                   )}
                 </div>
               ) : (
-                <div className="text-center p-6 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-3" />
-                  <p className="text-lg font-medium text-green-700 dark:text-green-400">
+                <div className="text-center p-4 sm:p-6 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <CheckCircle className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-green-600 mb-2 sm:mb-3" />
+                  <p className="text-sm sm:text-lg font-medium text-green-700 dark:text-green-400 break-all px-2">
                     {file?.name || "PDF"} uploaded successfully!
                   </p>
                   {extractedContent?.extractedTextLength && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-2">
                       Extracted{" "}
                       {extractedContent.extractedTextLength.toLocaleString()}{" "}
                       characters
@@ -774,65 +801,65 @@ const MultiModalQuizGenerator = () => {
               )}
             </TabsContent>
 
-            <TabsContent value="video" className="mt-6">
+            <TabsContent value="video" className="mt-4 sm:mt-6">
               {!uploadComplete ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Youtube className="h-6 w-6 text-red-600" />
-                    <h3 className="text-lg font-semibold">
+                <div className="space-y-3 sm:space-y-4">
+                  <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                    <Youtube className="h-5 w-5 sm:h-6 sm:w-6 text-red-600 flex-shrink-0" />
+                    <h3 className="text-sm sm:text-base md:text-lg font-semibold">
                       Generate Quiz from YouTube Video
                     </h3>
                   </div>
                   <Input
                     type="text"
-                    placeholder="Enter YouTube URL (e.g., https://youtube.com/watch?v=...)"
+                    placeholder="Enter YouTube URL..."
                     value={youtubeUrl}
                     onChange={(e) => setYoutubeUrl(e.target.value)}
-                    className="text-lg p-6"
+                    className="text-sm sm:text-base md:text-lg p-3 sm:p-4 md:p-6"
                     disabled={loading}
                   />
                   <Button
-                    className="w-full p-6 text-lg"
+                    className="w-full p-3 sm:p-4 md:p-6 text-sm sm:text-base md:text-lg"
                     onClick={handleYoutubeSubmit}
                     disabled={loading || !youtubeUrl}
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
                         Processing Video...
                       </>
                     ) : (
                       <>
-                        <Video className="mr-2 h-5 w-5" />
+                        <Video className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                         Process Video
                       </>
                     )}
                   </Button>
-                  <p className="text-sm text-gray-500 text-center">
+                  <p className="text-xs sm:text-sm text-gray-500 text-center">
                     The video must have English captions/subtitles enabled
                   </p>
                 </div>
               ) : (
-                <div className="text-center p-6 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-3" />
-                  <p className="text-lg font-medium text-green-700 dark:text-green-400">
+                <div className="text-center p-4 sm:p-6 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <CheckCircle className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-green-600 mb-2 sm:mb-3" />
+                  <p className="text-sm sm:text-lg font-medium text-green-700 dark:text-green-400">
                     Video processed successfully!
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 truncate max-w-md mx-auto">
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-2 truncate max-w-full px-2">
                     {youtubeUrl}
                   </p>
                 </div>
               )}
             </TabsContent>
 
-            <TabsContent value="image" className="mt-6">
+            <TabsContent value="image" className="mt-4 sm:mt-6">
               {!uploadComplete ? (
-                <div className="border-2 border-dashed rounded-lg p-12 text-center hover:border-blue-400 transition-colors">
-                  <Image className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-                  <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div className="border-2 border-dashed rounded-lg p-4 sm:p-8 md:p-12 text-center hover:border-blue-400 transition-colors">
+                  <Image className="mx-auto h-8 w-8 sm:h-12 sm:w-12 md:h-16 md:w-16 text-gray-400 mb-2 sm:mb-4" />
+                  <p className="text-sm sm:text-base md:text-lg font-medium text-gray-700 dark:text-gray-300 mb-1 sm:mb-2">
                     Upload Images with Text
                   </p>
-                  <p className="text-sm text-gray-500 mb-4">
+                  <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4 px-2">
                     OCR will extract text from images | Supported: .jpg, .png,
                     .jpeg
                   </p>
@@ -846,7 +873,7 @@ const MultiModalQuizGenerator = () => {
                   />
                   <label htmlFor="image-upload">
                     <Button
-                      className="mt-4"
+                      className="mt-2 sm:mt-4 text-sm"
                       variant="outline"
                       disabled={loading}
                       asChild
@@ -854,12 +881,12 @@ const MultiModalQuizGenerator = () => {
                       <span>
                         {loading ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                             Processing...
                           </>
                         ) : (
                           <>
-                            <Image className="mr-2 h-4 w-4" />
+                            <Image className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                             Choose Image
                           </>
                         )}
@@ -867,50 +894,54 @@ const MultiModalQuizGenerator = () => {
                     </Button>
                   </label>
                   {file && contentType === "image" && (
-                    <p className="mt-4 text-sm text-gray-600">
+                    <p className="mt-3 sm:mt-4 text-xs sm:text-sm text-gray-600 break-all px-2">
                       Selected: {file.name}
                     </p>
                   )}
                 </div>
               ) : (
-                <div className="text-center p-6 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-3" />
-                  <p className="text-lg font-medium text-green-700 dark:text-green-400">
+                <div className="text-center p-4 sm:p-6 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <CheckCircle className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-green-600 mb-2 sm:mb-3" />
+                  <p className="text-sm sm:text-lg font-medium text-green-700 dark:text-green-400 break-all px-2">
                     {file?.name || "Image"} uploaded successfully!
                   </p>
                 </div>
               )}
             </TabsContent>
 
-            <TabsContent value="audio" className="mt-6">
-              <div className="space-y-6">
+            <TabsContent value="audio" className="mt-4 sm:mt-6">
+              <div className="space-y-4 sm:space-y-6">
                 <div className="text-center">
-                  <Mic className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Record Audio</h3>
-                  <p className="text-sm text-gray-500 mb-6">
+                  <Mic className="mx-auto h-10 w-10 sm:h-12 sm:w-12 md:h-16 md:w-16 text-gray-400 mb-2 sm:mb-4" />
+                  <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-1 sm:mb-2">
+                    Record Audio
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-500 mb-4 sm:mb-6 px-2">
                     Record a lecture or explanation to generate quiz questions
                   </p>
                 </div>
 
                 {!isRecording && !audioBlob && !uploadComplete && (
                   <Button
-                    className="w-full p-6 text-lg"
+                    className="w-full p-4 sm:p-6 text-sm sm:text-base md:text-lg"
                     onClick={startRecording}
                     disabled={loading}
                   >
-                    <Mic className="mr-2 h-5 w-5" />
+                    <Mic className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
                     Start Recording
                   </Button>
                 )}
 
                 {isRecording && (
-                  <div className="text-center space-y-4">
+                  <div className="text-center space-y-3 sm:space-y-4">
                     <div className="flex items-center justify-center gap-2">
-                      <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse" />
-                      <span className="text-lg font-medium">Recording...</span>
+                      <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-red-600 rounded-full animate-pulse" />
+                      <span className="text-sm sm:text-base md:text-lg font-medium">
+                        Recording...
+                      </span>
                     </div>
                     <Button
-                      className="w-full p-6 text-lg"
+                      className="w-full p-4 sm:p-6 text-sm sm:text-base md:text-lg"
                       onClick={stopRecording}
                       variant="destructive"
                     >
@@ -920,9 +951,9 @@ const MultiModalQuizGenerator = () => {
                 )}
 
                 {uploadComplete && contentType === "audio" && (
-                  <div className="text-center p-6 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <CheckCircle className="mx-auto h-12 w-12 text-green-600 mb-3" />
-                    <p className="text-lg font-medium text-green-700 dark:text-green-400">
+                  <div className="text-center p-4 sm:p-6 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                    <CheckCircle className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-green-600 mb-2 sm:mb-3" />
+                    <p className="text-sm sm:text-lg font-medium text-green-700 dark:text-green-400">
                       Recording complete!
                     </p>
                   </div>
@@ -938,8 +969,8 @@ const MultiModalQuizGenerator = () => {
           {generatedQuiz && <GeneratedQuizPanel />}
 
           {loading && uploadProgress > 0 && (
-            <div className="mt-6 space-y-2">
-              <div className="flex justify-between text-sm text-gray-600">
+            <div className="mt-4 sm:mt-6 space-y-2">
+              <div className="flex justify-between text-xs sm:text-sm text-gray-600">
                 <span>Uploading file...</span>
                 <span>{uploadProgress}%</span>
               </div>
@@ -948,27 +979,39 @@ const MultiModalQuizGenerator = () => {
           )}
 
           {!uploadComplete && (
-            <div className="mt-8 p-6 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg">
-              <h4 className="font-semibold mb-3 flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-purple-600" />
+            <div className="mt-6 sm:mt-8 p-4 sm:p-6 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg">
+              <h4 className="text-sm sm:text-base font-semibold mb-2 sm:mb-3 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0" />
                 How it works:
               </h4>
-              <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
-                <li>
-                  📄 <strong>PDF:</strong> Extracts text and generates
-                  contextual questions
+              <ul className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm text-gray-700 dark:text-gray-300">
+                <li className="flex items-start gap-2">
+                  <span className="flex-shrink-0">📄</span>
+                  <span>
+                    <strong>PDF:</strong> Extracts text and generates contextual
+                    questions
+                  </span>
                 </li>
-                <li>
-                  🎥 <strong>Video:</strong> Uses transcripts to create
-                  comprehensive quizzes
+                <li className="flex items-start gap-2">
+                  <span className="flex-shrink-0">🎥</span>
+                  <span>
+                    <strong>Video:</strong> Uses transcripts to create
+                    comprehensive quizzes
+                  </span>
                 </li>
-                <li>
-                  🖼️ <strong>Image:</strong> OCR technology reads text from
-                  images
+                <li className="flex items-start gap-2">
+                  <span className="flex-shrink-0">🖼️</span>
+                  <span>
+                    <strong>Image:</strong> OCR technology reads text from
+                    images
+                  </span>
                 </li>
-                <li>
-                  🎤 <strong>Audio:</strong> Transcribes speech and creates
-                  intelligent questions
+                <li className="flex items-start gap-2">
+                  <span className="flex-shrink-0">🎤</span>
+                  <span>
+                    <strong>Audio:</strong> Transcribes speech and creates
+                    intelligent questions
+                  </span>
                 </li>
               </ul>
             </div>

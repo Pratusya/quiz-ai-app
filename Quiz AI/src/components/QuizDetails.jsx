@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -51,7 +51,9 @@ const QuizDetails = () => {
   const { quizId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { userId, isLoaded: authLoaded } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
+  const userId = user?.id;
+  const authLoaded = !authLoading;
 
   // State management
   const [quiz, setQuiz] = useState(location.state?.quizData || null);

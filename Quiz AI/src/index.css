@@ -98,6 +98,34 @@
     scroll-behavior: smooth;
   }
 
+  /* Reduce motion preference */
+  html.reduce-motion *,
+  html.reduce-motion *::before,
+  html.reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Compact mode */
+  html.compact-mode {
+    font-size: 14px;
+  }
+
+  html.compact-mode .glass-card,
+  html.compact-mode .p-6 {
+    padding: 1rem;
+  }
+
+  html.compact-mode .space-y-6 > * + * {
+    margin-top: 1rem;
+  }
+
+  html.compact-mode .gap-6 {
+    gap: 1rem;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;

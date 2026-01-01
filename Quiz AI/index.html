@@ -5,6 +5,29 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Quiz AI - AI-Powered Quiz Generator</title>
+    <script>
+      // Suppress browser extension errors (runtime.lastError)
+      const originalConsoleError = console.error;
+      console.error = function (...args) {
+        if (
+          args[0] &&
+          typeof args[0] === "string" &&
+          (args[0].includes("runtime.lastError") ||
+            args[0].includes("message port closed"))
+        ) {
+          return; // Suppress extension-related errors
+        }
+        originalConsoleError.apply(console, args);
+      };
+
+      // Also handle uncaught errors from extensions
+      window.addEventListener("error", function (event) {
+        if (event.message && event.message.includes("runtime.lastError")) {
+          event.preventDefault();
+          return false;
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

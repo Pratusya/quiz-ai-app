@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -254,7 +254,9 @@ const useQuizData = (userId, authLoaded) => {
 };
 
 const QuizResults = () => {
-  const { userId, isLoaded: authLoaded } = useAuth();
+  const { user, isLoading } = useAuth();
+  const userId = user?.id;
+  const authLoaded = !isLoading;
   const navigate = useNavigate();
   const { results, statistics, loading, error } = useQuizData(
     userId,

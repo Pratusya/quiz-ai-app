@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 import { motion } from "framer-motion";
 import {
@@ -17,7 +17,8 @@ import {
 import { Sparkles, Trophy, Target, Zap } from "lucide-react";
 
 const GamificationDisplay = ({ compact = false }) => {
-  const { isSignedIn, userId } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const userId = user?.id;
   const [gamificationData, setGamificationData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -90,7 +91,7 @@ const GamificationDisplay = ({ compact = false }) => {
     }
   };
 
-  if (!isSignedIn) {
+  if (!isAuthenticated) {
     return null;
   }
 

@@ -24,12 +24,12 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, SignInButton } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
 import GamificationDisplay from "./GamificationDisplay";
 
 function Home() {
   const navigate = useNavigate();
-  const { isSignedIn } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [activeFeature, setActiveFeature] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
 
@@ -157,7 +157,7 @@ function Home() {
               transition={{ delay: 0.6 }}
               className="flex flex-col xs:flex-row gap-3 sm:gap-4 justify-center items-center px-4 sm:px-0"
             >
-              {isSignedIn ? (
+              {isAuthenticated ? (
                 <>
                   <Button
                     onClick={() => navigate("/generate-quiz")}
@@ -182,18 +182,17 @@ function Home() {
                 </>
               ) : (
                 <>
-                  <SignInButton mode="modal">
-                    <Button
-                      size="xl"
-                      variant="gradient"
-                      shimmer
-                      className="group"
-                    >
-                      <Sparkles className="w-5 h-5 mr-2" />
-                      Get Started Free
-                      <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </Button>
-                  </SignInButton>
+                  <Button
+                    onClick={() => navigate("/login")}
+                    size="xl"
+                    variant="gradient"
+                    shimmer
+                    className="group"
+                  >
+                    <Sparkles className="w-5 h-5 mr-2" />
+                    Get Started Free
+                    <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </Button>
                   <Button
                     onClick={() => navigate("/about")}
                     size="xl"
@@ -484,7 +483,7 @@ function Home() {
         </section>
 
         {/* Gamification Display for signed-in users */}
-        {isSignedIn && (
+        {isAuthenticated && (
           <motion.section
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -531,7 +530,7 @@ function Home() {
                 viewport={{ once: true }}
                 transition={{ delay: 0.4 }}
               >
-                {isSignedIn ? (
+                {isAuthenticated ? (
                   <Button
                     onClick={() => navigate("/generate-quiz")}
                     size="xl"
@@ -541,15 +540,14 @@ function Home() {
                     <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
                 ) : (
-                  <SignInButton mode="modal">
-                    <Button
-                      size="xl"
-                      className="bg-white text-primary hover:bg-white/90 shadow-2xl"
-                    >
-                      Get Started for Free
-                      <ArrowRight className="ml-2 w-5 h-5" />
-                    </Button>
-                  </SignInButton>
+                  <Button
+                    onClick={() => navigate("/login")}
+                    size="xl"
+                    className="bg-white text-primary hover:bg-white/90 shadow-2xl"
+                  >
+                    Get Started for Free
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
                 )}
               </motion.div>
             </div>
