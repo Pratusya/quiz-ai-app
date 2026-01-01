@@ -1,9 +1,9 @@
 /**
  * Security Settings Page
- * Password change, two-factor auth, and account security
+ * Password change, two-factor auth, phone verification, and account security
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -27,6 +27,8 @@ import {
   Trash2,
   Activity,
   Clock,
+  Phone,
+  Send,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -37,10 +39,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
+import {
+  setupRecaptcha,
+  sendFirebaseOTP,
+  verifyFirebaseOTP,
+  isFirebaseConfigured,
+} from "../config/firebase";
 
 function Security() {
   const navigate = useNavigate();
-  const { user, changePassword, logoutAll, logout } = useAuth();
+  const { user, changePassword, logoutAll, logout, updateProfile } = useAuth();
 
   // Password change state
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -56,6 +64,16 @@ function Security() {
   });
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+  // Phone verification state
+  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [isSendingOTP, setIsSendingOTP] = useState(false);
+  const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const sendOtpButtonRef = useRef(null);
+
   // Delete account state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -63,6 +81,93 @@ function Security() {
 
   // Logout all state
   const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
+
+  // Countdown timer for resend OTP
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  // Setup reCAPTCHA when phone verification modal opens
+  useEffect(() => {
+    if (showPhoneVerification && isFirebaseConfigured()) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        if (sendOtpButtonRef.current) {
+          setupRecaptcha("send-otp-button");
+        }
+      }, 500);
+    }
+  }, [showPhoneVerification]);
+
+  const handleSendOTP = async () => {
+    if (!phoneNumber || phoneNumber.length < 10) {
+      toast.error("Please enter a valid phone number");
+      return;
+    }
+
+    if (!isFirebaseConfigured()) {
+      toast.error(
+        "Firebase Phone Auth not configured. Please add Firebase credentials."
+      );
+      return;
+    }
+
+    setIsSendingOTP(true);
+    try {
+      // Format phone number
+      let formattedPhone = phoneNumber.trim();
+      if (!formattedPhone.startsWith("+")) {
+        formattedPhone = "+91" + formattedPhone.replace(/^0/, "");
+      }
+
+      await sendFirebaseOTP(formattedPhone);
+      setOtpSent(true);
+      setCountdown(60);
+      toast.success("OTP sent to " + formattedPhone);
+    } catch (error) {
+      toast.error(error.message || "Failed to send OTP");
+      // Reset reCAPTCHA on error
+      if (sendOtpButtonRef.current) {
+        setupRecaptcha("send-otp-button");
+      }
+    } finally {
+      setIsSendingOTP(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (!otpCode || otpCode.length !== 6) {
+      toast.error("Please enter the 6-digit OTP");
+      return;
+    }
+
+    setIsVerifyingOTP(true);
+    try {
+      await verifyFirebaseOTP(otpCode);
+
+      // Update user profile with verified phone
+      let formattedPhone = phoneNumber.trim();
+      if (!formattedPhone.startsWith("+")) {
+        formattedPhone = "+91" + formattedPhone.replace(/^0/, "");
+      }
+
+      // Save to your backend
+      await updateProfile({ phone: formattedPhone, phoneVerified: true });
+
+      toast.success("Phone number verified successfully!");
+      setShowPhoneVerification(false);
+      setPhoneNumber("");
+      setOtpCode("");
+      setOtpSent(false);
+    } catch (error) {
+      toast.error(error.message || "Invalid OTP");
+    } finally {
+      setIsVerifyingOTP(false);
+    }
+  };
 
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
@@ -405,6 +510,60 @@ function Security() {
             </GlassCard>
           </motion.div>
 
+          {/* Phone Verification Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <GlassCard className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Phone className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Phone Verification</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Add a phone number for extra security (10,000 free/month)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
+                <div>
+                  <p className="font-medium">Phone Number</p>
+                  <p className="text-sm text-muted-foreground">
+                    {user?.phone ? (
+                      <span className="flex items-center gap-2">
+                        {user.phone}
+                        {user.phoneVerified && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-600 dark:text-green-400">
+                            Verified
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      "Not added"
+                    )}
+                  </p>
+                </div>
+                <Button onClick={() => setShowPhoneVerification(true)}>
+                  <Smartphone className="w-4 h-4 mr-2" />
+                  {user?.phone ? "Change" : "Add Phone"}
+                </Button>
+              </div>
+
+              {!isFirebaseConfigured() && (
+                <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                  <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                    ⚠️ Firebase not configured. Add VITE_FIREBASE_* environment
+                    variables.
+                  </p>
+                </div>
+              )}
+            </GlassCard>
+          </motion.div>
+
           {/* Active Sessions */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -564,6 +723,146 @@ function Security() {
                 )}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Phone Verification Dialog */}
+        <Dialog
+          open={showPhoneVerification}
+          onOpenChange={(open) => {
+            setShowPhoneVerification(open);
+            if (!open) {
+              setOtpSent(false);
+              setOtpCode("");
+              setPhoneNumber("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Phone className="w-5 h-5 text-primary" />
+                Phone Verification
+              </DialogTitle>
+              <DialogDescription>
+                {!otpSent
+                  ? "Enter your phone number to receive a verification code."
+                  : "Enter the 6-digit code sent to your phone."}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4 space-y-4">
+              {!otpSent ? (
+                <>
+                  <div className="space-y-2">
+                    <Label>Phone Number</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="tel"
+                        placeholder="+91 9876543210"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Include country code (e.g., +91 for India)
+                    </p>
+                  </div>
+
+                  <Button
+                    id="send-otp-button"
+                    ref={sendOtpButtonRef}
+                    className="w-full"
+                    variant="gradient"
+                    onClick={handleSendOTP}
+                    disabled={isSendingOTP || !phoneNumber}
+                  >
+                    {isSendingOTP ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending OTP...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Send OTP
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label>Enter OTP</Label>
+                    <Input
+                      type="text"
+                      placeholder="123456"
+                      value={otpCode}
+                      onChange={(e) =>
+                        setOtpCode(
+                          e.target.value.replace(/\D/g, "").slice(0, 6)
+                        )
+                      }
+                      maxLength={6}
+                      className="text-center text-2xl tracking-widest"
+                    />
+                    <p className="text-xs text-muted-foreground text-center">
+                      OTP sent to {phoneNumber}
+                    </p>
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    variant="gradient"
+                    onClick={handleVerifyOTP}
+                    disabled={isVerifyingOTP || otpCode.length !== 6}
+                  >
+                    {isVerifyingOTP ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Verify OTP
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="text-center">
+                    {countdown > 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Resend OTP in {countdown}s
+                      </p>
+                    ) : (
+                      <Button
+                        variant="link"
+                        onClick={() => {
+                          setOtpSent(false);
+                          setOtpCode("");
+                          // Re-setup reCAPTCHA
+                          setTimeout(() => {
+                            if (sendOtpButtonRef.current) {
+                              setupRecaptcha("send-otp-button");
+                            }
+                          }, 500);
+                        }}
+                      >
+                        Change number or resend
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="pt-2 border-t text-center">
+              <p className="text-xs text-muted-foreground">
+                Powered by Firebase Phone Auth (10,000 free verifications/month)
+              </p>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
