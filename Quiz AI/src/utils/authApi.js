@@ -375,75 +375,6 @@ export function isAuthenticated() {
   return !!accessToken;
 }
 
-/**
- * Send OTP to phone number
- */
-export async function sendPhoneOTP(phone) {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/phone/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone }),
-    });
-
-    return await response.json();
-  } catch (error) {
-    return { success: false, error: "Failed to send OTP" };
-  }
-}
-
-/**
- * Verify phone OTP and login/register
- */
-export async function verifyPhoneOTP(phone, otp, name) {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/phone/verify-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, otp, name }),
-    });
-
-    const data = await response.json();
-
-    if (data.success) {
-      storeTokens(data.accessToken, data.refreshToken);
-      storeUser(data.user);
-    }
-
-    return data;
-  } catch (error) {
-    return { success: false, error: "Verification failed" };
-  }
-}
-
-/**
- * Login/Register with Firebase Phone Auth
- * Called after Firebase OTP verification succeeds
- */
-export async function loginWithFirebasePhone(phone, firebaseIdToken) {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/api/auth/phone/firebase-login`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, firebaseIdToken }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (data.success) {
-      storeTokens(data.accessToken, data.refreshToken);
-      storeUser(data.user);
-    }
-
-    return data;
-  } catch (error) {
-    return { success: false, error: "Login failed" };
-  }
-}
-
 export default {
   register,
   login,
@@ -465,7 +396,4 @@ export default {
   storeTokens,
   storeUser,
   clearTokens,
-  sendPhoneOTP,
-  verifyPhoneOTP,
-  loginWithFirebasePhone,
 };

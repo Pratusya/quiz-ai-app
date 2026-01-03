@@ -594,8 +594,6 @@ function QuizGenerator() {
         questions: formattedQuestions,
       };
 
-      console.log("Quiz payload:", JSON.stringify(requestPayload, null, 2)); // For debugging
-
       const response = await axios.post(
         `${API_URL}/api/quizzes`,
         requestPayload,
@@ -974,13 +972,6 @@ function QuizGenerator() {
         questionType: generationParams.questionType || "MCQ",
         language: generationParams.language || "english",
       };
-
-      // Log the data being sent for debugging
-      console.log("Saving quiz history with:", {
-        quizId,
-        promptUsed,
-        parameters,
-      });
 
       const response = await axios.post(
         `${API_URL}/api/quiz-history`,

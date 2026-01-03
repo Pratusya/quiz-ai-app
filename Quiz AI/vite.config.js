@@ -18,4 +18,6 @@ export default defineConfig({
       },
     },
   },
+  logLevel: "error",
+  clearScreen: true,
 });

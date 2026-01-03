@@ -1,9 +1,9 @@
 /**
  * Login Page Component
- * Modern, secure login page with social login and phone OTP options
+ * Modern, secure login page with email and social login options
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -23,57 +23,22 @@ import {
   Loader2,
   Brain,
   Sparkles,
-  Phone,
-  ArrowLeft,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import authApi from "../utils/authApi";
-import {
-  setupRecaptcha,
-  sendFirebaseOTP,
-  verifyFirebaseOTP,
-  isFirebaseConfigured,
-} from "../config/firebase";
 
 function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login, loginWithOAuth, isLoading } = useAuth();
-  const sendOtpButtonRef = useRef(null);
 
   // Form states
-  const [loginMethod, setLoginMethod] = useState("email"); // email, phone
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [countdown, setCountdown] = useState(0);
 
   const redirectTo = searchParams.get("redirect") || "/";
-
-  // Countdown timer for resend OTP
-  useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [countdown]);
-
-  // Setup reCAPTCHA when phone login method is selected
-  useEffect(() => {
-    if (loginMethod === "phone" && isFirebaseConfigured() && !otpSent) {
-      setTimeout(() => {
-        if (sendOtpButtonRef.current) {
-          setupRecaptcha("send-otp-btn");
-        }
-      }, 500);
-    }
-  }, [loginMethod, otpSent]);
 
   const handleEmailSubmit = async (e) => {
     e.preventDefault();
@@ -99,91 +64,6 @@ function Login() {
       }
     } catch (err) {
       setError("An unexpected error occurred");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSendOTP = async () => {
-    if (!phone || phone.length < 10) {
-      setError("Please enter a valid phone number");
-      return;
-    }
-
-    // Check if Firebase is configured
-    if (!isFirebaseConfigured()) {
-      setError(
-        "Phone authentication is not configured. Please use email login."
-      );
-      return;
-    }
-
-    setError("");
-    setOtpLoading(true);
-
-    try {
-      // Format phone number
-      let formattedPhone = phone.trim();
-      if (!formattedPhone.startsWith("+")) {
-        formattedPhone = "+91" + formattedPhone.replace(/^0/, "");
-      }
-
-      await sendFirebaseOTP(formattedPhone);
-      setOtpSent(true);
-      setCountdown(60);
-      toast.success("OTP sent to " + formattedPhone);
-    } catch (err) {
-      setError(err.message || "Failed to send OTP");
-      // Re-setup reCAPTCHA on error
-      setTimeout(() => {
-        if (sendOtpButtonRef.current) {
-          setupRecaptcha("send-otp-btn");
-        }
-      }, 500);
-    } finally {
-      setOtpLoading(false);
-    }
-  };
-
-  const handlePhoneSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setIsSubmitting(true);
-
-    try {
-      // Verify OTP with Firebase
-      const firebaseResult = await verifyFirebaseOTP(otp);
-
-      if (firebaseResult.user) {
-        // Get Firebase ID token and send to backend
-        const idToken = await firebaseResult.user.getIdToken();
-
-        // Format phone number
-        let formattedPhone = phone.trim();
-        if (!formattedPhone.startsWith("+")) {
-          formattedPhone = "+91" + formattedPhone.replace(/^0/, "");
-        }
-
-        // Call backend to create/login user with phone
-        const result = await authApi.loginWithFirebasePhone(
-          formattedPhone,
-          idToken
-        );
-
-        if (result.success) {
-          authApi.storeTokens(result.accessToken, result.refreshToken);
-          authApi.storeUser(result.user);
-          toast.success(
-            result.isNewUser ? "Account created!" : "Welcome back!"
-          );
-          navigate(redirectTo);
-          window.location.reload();
-        } else {
-          setError(result.error || "Login failed");
-        }
-      }
-    } catch (err) {
-      setError(err.message || "Verification failed");
     } finally {
       setIsSubmitting(false);
     }
@@ -235,251 +115,81 @@ function Login() {
             )}
           </AnimatePresence>
 
-          {/* Login Method Tabs */}
-          <div className="flex gap-2 mb-6 p-1 bg-muted rounded-xl">
-            <button
-              onClick={() => {
-                setLoginMethod("email");
-                setError("");
-              }}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                loginMethod === "email"
-                  ? "bg-background shadow-sm"
-                  : "hover:bg-background/50"
-              }`}
-            >
-              <Mail className="w-4 h-4 inline mr-2" />
-              Email
-            </button>
-            <button
-              onClick={() => {
-                setLoginMethod("phone");
-                setError("");
-                setOtpSent(false);
-              }}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                loginMethod === "phone"
-                  ? "bg-background shadow-sm"
-                  : "hover:bg-background/50"
-              }`}
-            >
-              <Phone className="w-4 h-4 inline mr-2" />
-              Phone
-            </button>
-          </div>
-
           {/* Email Login Form */}
-          {loginMethod === "email" && (
-            <form onSubmit={handleEmailSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10"
-                    required
-                    autoComplete="email"
-                  />
-                </div>
+          <form onSubmit={handleEmailSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10"
+                  required
+                  autoComplete="email"
+                />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  <Link
-                    to="/forgot-password"
-                    className="text-sm text-primary hover:underline"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10"
-                    required
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  to="/forgot-password"
+                  className="text-sm text-primary hover:underline"
+                >
+                  Forgot password?
+                </Link>
               </div>
-
-              <Button
-                type="submit"
-                variant="gradient"
-                className="w-full"
-                disabled={isSubmitting || isLoading}
-                shimmer
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    Sign In
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </>
-                )}
-              </Button>
-            </form>
-          )}
-
-          {/* Phone Login Form */}
-          {loginMethod === "phone" && (
-            <form
-              onSubmit={otpSent ? handlePhoneSubmit : (e) => e.preventDefault()}
-              className="space-y-5"
-            >
-              {!otpSent ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                      <Input
-                        id="phone"
-                        type="tel"
-                        placeholder="+91 9876543210"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="pl-10"
-                        required
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      We'll send you a one-time verification code
-                    </p>
-                  </div>
-
-                  <Button
-                    id="send-otp-btn"
-                    ref={sendOtpButtonRef}
-                    type="button"
-                    variant="gradient"
-                    className="w-full"
-                    onClick={handleSendOTP}
-                    disabled={otpLoading || !phone}
-                    shimmer
-                  >
-                    {otpLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Sending OTP...
-                      </>
-                    ) : (
-                      <>
-                        Send OTP
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                      </>
-                    )}
-                  </Button>
-
-                  {!isFirebaseConfigured() && (
-                    <p className="text-xs text-amber-500 text-center">
-                      ⚠️ Phone auth not configured. Please use email login.
-                    </p>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  required
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
                   )}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              variant="gradient"
+              className="w-full"
+              disabled={isSubmitting || isLoading}
+              shimmer
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Signing in...
                 </>
               ) : (
                 <>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setOtpSent(false)}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                      </button>
-                      <Label htmlFor="otp">Enter OTP</Label>
-                    </div>
-                    <Input
-                      id="otp"
-                      type="text"
-                      placeholder="Enter 6-digit OTP"
-                      value={otp}
-                      onChange={(e) =>
-                        setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))
-                      }
-                      className="text-center text-2xl tracking-widest"
-                      maxLength={6}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground text-center">
-                      OTP sent to {phone}
-                    </p>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    variant="gradient"
-                    className="w-full"
-                    disabled={isSubmitting || otp.length !== 6}
-                    shimmer
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : (
-                      <>
-                        Verify & Sign In
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="text-center">
-                    {countdown > 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Resend OTP in {countdown}s
-                      </p>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOtpSent(false);
-                          setOtp("");
-                          // Re-setup reCAPTCHA
-                          setTimeout(() => {
-                            if (sendOtpButtonRef.current) {
-                              setupRecaptcha("send-otp-btn");
-                            }
-                          }, 500);
-                        }}
-                        className="text-sm text-primary hover:underline"
-                      >
-                        Change number or resend
-                      </button>
-                    )}
-                  </div>
+                  Sign In
+                  <ArrowRight className="w-4 h-4 ml-2" />
                 </>
               )}
-            </form>
-          )}
+            </Button>
+          </form>
 
           {/* Divider */}
           <div className="relative my-8">
