@@ -77,18 +77,26 @@ async function sendEmail({ to, subject, html, text }) {
     const fromEmail =
       process.env.SMTP_FROM ||
       process.env.EMAIL_FROM ||
+      process.env.SMTP_USER ||
       process.env.EMAIL_USER ||
       "noreply@quizai.com";
 
     console.log("[EMAIL] Sending email to:", to, "from:", fromEmail);
 
-    const result = await transport.sendMail({
+    // Add timeout to prevent hanging (10 seconds)
+    const sendPromise = transport.sendMail({
       from: `"Quiz AI" <${fromEmail}>`,
       to,
       subject,
       html,
       text,
     });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Email sending timed out")), 10000)
+    );
+
+    const result = await Promise.race([sendPromise, timeoutPromise]);
 
     console.log("[EMAIL] Sent successfully:", result.messageId);
     return {

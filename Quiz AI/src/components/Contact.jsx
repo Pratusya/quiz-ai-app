@@ -38,9 +38,9 @@ function Contact() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Create abort controller for timeout
+    // Create abort controller for timeout (60 seconds for Render cold start)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/contact`, {

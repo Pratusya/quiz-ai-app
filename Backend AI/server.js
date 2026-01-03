@@ -480,30 +480,29 @@ app.post("/api/contact", async (req, res) => {
       `New contact form submission from: ${trimmedName} (${trimmedEmail})`
     );
 
-    // Send email notifications using emailUtils
+    // Send email notifications using emailUtils (don't block response)
     const emailUtils = require("./auth/emailUtils");
 
     if (emailUtils.isEmailConfigured()) {
-      try {
-        // Send notification to admin
-        await emailUtils.sendContactNotification(
+      // Send emails in background - don't wait for them
+      Promise.all([
+        emailUtils.sendContactNotification(
           trimmedName,
           trimmedEmail,
           trimmedMessage
-        );
-
-        // Send auto-reply to user
-        await emailUtils.sendContactAutoReply(
+        ),
+        emailUtils.sendContactAutoReply(
           trimmedName,
           trimmedEmail,
           trimmedMessage
-        );
-
-        console.log("Contact form emails sent successfully");
-      } catch (emailError) {
-        console.error("Failed to send contact form email:", emailError);
-        // Don't fail the request if email fails - message is still saved to DB
-      }
+        ),
+      ])
+        .then(() => {
+          console.log("Contact form emails sent successfully");
+        })
+        .catch((emailError) => {
+          console.error("Failed to send contact form email:", emailError);
+        });
     } else {
       console.log(
         "[DEV MODE] Email notification would be sent for contact form"
