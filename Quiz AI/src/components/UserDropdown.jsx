@@ -13,6 +13,7 @@ import {
   Settings,
   LogOut,
   ChevronDown,
+  ChevronUp,
   Shield,
   Bell,
   Moon,
@@ -22,7 +23,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "./ThemeProvider";
 
-function UserDropdown() {
+function UserDropdown({ openUpward = false }) {
   const navigate = useNavigate();
   const { user, logout, isLoading } = useAuth();
   const { theme, setTheme } = useTheme();
@@ -99,11 +100,13 @@ function UserDropdown() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            initial={{ opacity: 0, y: openUpward ? -10 : 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            exit={{ opacity: 0, y: openUpward ? -10 : 10, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 mt-2 w-72 rounded-xl bg-card border border-border shadow-xl overflow-hidden z-50"
+            className={`absolute right-0 w-72 rounded-xl bg-card border border-border shadow-xl overflow-hidden z-50 ${
+              openUpward ? "bottom-full mb-2" : "top-full mt-2"
+            }`}
           >
             {/* User Info Header */}
             <div className="p-4 border-b border-border bg-muted/30">

@@ -231,7 +231,7 @@ function Navbar() {
                       <span className="text-sm text-muted-foreground">
                         Signed in
                       </span>
-                      <UserDropdown />
+                      <UserDropdown openUpward />
                     </div>
                   ) : (
                     <div className="flex gap-3">
