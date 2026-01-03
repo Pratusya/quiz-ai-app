@@ -7,6 +7,15 @@
 const nodemailer = require("nodemailer");
 const config = require("./config");
 
+// Log email config at startup
+console.log("[EMAIL] Initializing email config...");
+console.log("[EMAIL] SMTP_USER set:", !!process.env.SMTP_USER);
+console.log("[EMAIL] SMTP_PASS set:", !!process.env.SMTP_PASS);
+console.log(
+  "[EMAIL] SMTP_HOST:",
+  process.env.SMTP_HOST || "smtp.gmail.com (default)"
+);
+
 // Email configuration from environment variables
 const emailConfig = {
   host: process.env.SMTP_HOST || process.env.EMAIL_HOST || "smtp.gmail.com",
@@ -36,6 +45,16 @@ function getTransporter() {
       secure: emailConfig.secure,
       auth: emailConfig.auth,
     });
+  } else if (!transporter) {
+    console.log("[EMAIL] Cannot create transporter - missing credentials");
+    console.log(
+      "[EMAIL] auth.user:",
+      emailConfig.auth.user ? "SET" : "NOT SET"
+    );
+    console.log(
+      "[EMAIL] auth.pass:",
+      emailConfig.auth.pass ? "SET" : "NOT SET"
+    );
   }
   return transporter;
 }
@@ -47,7 +66,10 @@ function isEmailConfigured() {
   const configured = !!(emailConfig.auth.user && emailConfig.auth.pass);
   if (!configured) {
     console.log(
-      "[EMAIL] Not configured. Set EMAIL_USER and EMAIL_PASS environment variables."
+      "[EMAIL] Not configured. SMTP_USER:",
+      emailConfig.auth.user ? "SET" : "NOT SET",
+      "SMTP_PASS:",
+      emailConfig.auth.pass ? "SET" : "NOT SET"
     );
   }
   return configured;
