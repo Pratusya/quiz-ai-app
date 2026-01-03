@@ -27,7 +27,8 @@ const AITutor = ({ question, userAnswer, correctAnswer, topic, isCorrect }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API_URL =
+    import.meta.env.VITE_API_URL || "https://quiz-ai-app-pqyh.onrender.com";
 
   useEffect(() => {
     scrollToBottom();

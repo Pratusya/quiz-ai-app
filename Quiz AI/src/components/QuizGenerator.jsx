@@ -5,7 +5,8 @@ import { toast } from "react-hot-toast";
 import axios from "axios";
 import { Loader2, Share2, Download, Redo } from "lucide-react";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL =
+  import.meta.env.VITE_API_URL || "https://quiz-ai-app-pqyh.onrender.com";
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";

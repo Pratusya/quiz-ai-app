@@ -260,7 +260,8 @@ const QuizDetails = () => {
         throw new Error("User authentication required");
       }
 
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const API_URL =
+        import.meta.env.VITE_API_URL || "https://quiz-ai-app-pqyh.onrender.com";
       const response = await axios.get(`${API_URL}/api/quizzes/${quizId}`, {
         headers: {
           "Content-Type": "application/json",

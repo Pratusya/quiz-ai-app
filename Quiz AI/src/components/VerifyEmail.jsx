@@ -12,7 +12,8 @@ import {
 import { Button } from "./ui/button";
 import { GlassCard } from "./ui/GlassCard";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "https://quiz-ai-app-pqyh.onrender.com";
 
 const VerifyEmail = () => {
   const [searchParams] = useSearchParams();

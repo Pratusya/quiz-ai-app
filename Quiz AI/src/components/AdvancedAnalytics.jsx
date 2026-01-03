@@ -37,7 +37,8 @@ const AdvancedAnalytics = () => {
       return;
     }
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const API_URL =
+      import.meta.env.VITE_API_URL || "https://quiz-ai-app-pqyh.onrender.com";
     try {
       const response = await axios.get(
         `${API_URL}/api/analytics/comprehensive`,

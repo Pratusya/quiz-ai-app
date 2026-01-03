@@ -24,7 +24,9 @@ import {
   CardDescription,
 } from "./ui/card";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+// Use environment variable or fallback to production URL
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "https://quiz-ai-app-pqyh.onrender.com";
 
 function Contact() {
   const [name, setName] = useState("");
@@ -36,6 +38,10 @@ function Contact() {
     e.preventDefault();
     setIsSubmitting(true);
 
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/contact`, {
         method: "POST",
@@ -43,7 +49,10 @@ function Contact() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ name, email, message }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -56,8 +65,18 @@ function Contact() {
         toast.error(data.error || "Failed to send message. Please try again.");
       }
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error("Contact form error:", error);
-      toast.error("Failed to send message. Please try again later.");
+
+      if (error.name === "AbortError") {
+        toast.error(
+          "Request timed out. Server may be starting up, please try again."
+        );
+      } else if (error.message?.includes("fetch")) {
+        toast.error("Cannot connect to server. Please check your connection.");
+      } else {
+        toast.error("Failed to send message. Please try again later.");
+      }
     } finally {
       setIsSubmitting(false);
     }
