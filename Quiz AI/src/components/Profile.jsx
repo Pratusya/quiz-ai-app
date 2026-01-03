@@ -13,7 +13,6 @@ import { GlassCard } from "./ui/GlassCard";
 import {
   User,
   Mail,
-  Phone,
   Camera,
   Save,
   Loader2,
@@ -36,7 +35,6 @@ function Profile() {
   const [formData, setFormData] = useState({
     username: "",
     email: "",
-    phone: "",
   });
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [errors, setErrors] = useState({});
@@ -47,7 +45,6 @@ function Profile() {
       setFormData({
         username: user.username || "",
         email: user.email || "",
-        phone: user.phoneNumber || user.phone_number || "",
       });
     }
   }, [user]);
@@ -70,14 +67,6 @@ function Profile() {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(formData.email)) {
         newErrors.email = "Please enter a valid email address";
-      }
-    }
-
-    // Phone validation
-    if (formData.phone) {
-      const phoneDigits = formData.phone.replace(/[^\d]/g, "");
-      if (phoneDigits.length < 10) {
-        newErrors.phone = "Please enter a valid phone number";
       }
     }
 
@@ -132,12 +121,6 @@ function Profile() {
         updateData.email = formData.email;
       }
 
-      // Only include phone if changed
-      const currentPhone = user?.phoneNumber || user?.phone_number || "";
-      if (formData.phone !== currentPhone) {
-        updateData.phone_number = formData.phone || null;
-      }
-
       const result = await updateProfile(updateData);
 
       if (result.success) {
@@ -170,7 +153,6 @@ function Profile() {
     setFormData({
       username: user?.username || "",
       email: user?.email || "",
-      phone: user?.phoneNumber || user?.phone_number || "",
     });
     setAvatarPreview(null);
     setErrors({});
@@ -268,19 +250,6 @@ function Profile() {
                     <AlertCircle className="w-3 h-3" />
                     Email Not Verified
                   </span>
-                )}
-                {user?.phone_verified ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs">
-                    <Phone className="w-3 h-3" />
-                    Phone Verified
-                  </span>
-                ) : (
-                  (user?.phoneNumber || user?.phone_number) && (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 text-xs">
-                      <Phone className="w-3 h-3" />
-                      Phone Not Verified
-                    </span>
-                  )
                 )}
               </div>
 
@@ -400,45 +369,6 @@ function Profile() {
                   ) : (
                     <p className="px-3 py-2 bg-muted/50 rounded-lg">
                       {user?.email || "Not set"}
-                    </p>
-                  )}
-                </div>
-
-                {/* Phone */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    Phone Number
-                    {user?.phone_verified && (
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                    )}
-                  </Label>
-                  {isEditing ? (
-                    <div>
-                      <Input
-                        name="phone"
-                        type="tel"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        placeholder="+91 9876543210"
-                        className={errors.phone ? "border-red-500" : ""}
-                      />
-                      {errors.phone && (
-                        <p className="text-xs text-red-500 mt-1">
-                          {errors.phone}
-                        </p>
-                      )}
-                      {formData.phone !==
-                        (user?.phoneNumber || user?.phone_number || "") &&
-                        formData.phone && (
-                          <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                            ⚠️ Changing phone will require re-verification
-                          </p>
-                        )}
-                    </div>
-                  ) : (
-                    <p className="px-3 py-2 bg-muted/50 rounded-lg">
-                      {user?.phoneNumber || user?.phone_number || "Not set"}
                     </p>
                   )}
                 </div>
