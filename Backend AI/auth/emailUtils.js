@@ -44,6 +44,14 @@ function getTransporter() {
       port: emailConfig.port,
       secure: emailConfig.secure,
       auth: emailConfig.auth,
+      // Connection settings for reliability
+      connectionTimeout: 30000, // 30 seconds to establish connection
+      greetingTimeout: 30000, // 30 seconds for server greeting
+      socketTimeout: 60000, // 60 seconds for socket inactivity
+      pool: false, // Don't use pooling for simplicity
+      tls: {
+        rejectUnauthorized: false, // Allow self-signed certificates
+      },
     });
   } else if (!transporter) {
     console.log("[EMAIL] Cannot create transporter - missing credentials");
@@ -105,7 +113,7 @@ async function sendEmail({ to, subject, html, text }) {
 
     console.log("[EMAIL] Sending email to:", to, "from:", fromEmail);
 
-    // Add timeout to prevent hanging (10 seconds)
+    // Add timeout to prevent hanging (30 seconds for slower SMTP connections)
     const sendPromise = transport.sendMail({
       from: `"Quiz AI" <${fromEmail}>`,
       to,
@@ -115,7 +123,7 @@ async function sendEmail({ to, subject, html, text }) {
     });
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Email sending timed out")), 10000)
+      setTimeout(() => reject(new Error("Email sending timed out")), 30000)
     );
 
     const result = await Promise.race([sendPromise, timeoutPromise]);
